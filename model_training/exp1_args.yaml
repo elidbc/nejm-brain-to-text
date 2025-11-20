@@ -3,7 +3,20 @@ experiment:
   seed: 42
 
 model:
-  
+  adapter:
+    hidden_dim: 256
+    dropout_rate: 0.2
+    output_dim: 768
+  gru_decoder:
+    input_dim: 768
+    hidden_dim: 768
+    num_layers: 5
+    dropout_rate: 0.4
+    bidirectional: True
+  num_classes: 41
+  neural_dim: 512
+  patch_size: 14
+  patch_stride: 4
 
 
 dataset:
@@ -29,6 +42,7 @@ dataset:
   must_include_days: null # specific days to include in the dataset
   test_percentage: 0.1 # percentage of data to use for testing
   feature_subset: null # specific features to include in the dataset
+  n_sessions: 45 # number of sessions in the dataset
 
   dataset_dir: ../data/hdf5_data_final # directory containing the dataset
   bad_trials_dict: null # dictionary of bad trials to exclude from the dataset
