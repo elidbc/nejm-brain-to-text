@@ -1,7 +1,7 @@
 import torch
 from torch import nn
 
-class dayAdapter(nn.Module):
+class DayAdapter(nn.Module):
     """
     Interface for data -> GRU unit
     Improves over baseline model with a non-linearity
@@ -58,14 +58,14 @@ class GRUDecoder(nn.Module):
 
 class Exp1Model(nn.Module):
     """
-    Primary Model. Combines dayAdapter and GRUDecoder
+    Primary Model. Combines DayAdapter and GRUDecoder
     """
     def __init__(self, config, num_days):
         super().__init__()
         self.config = config
 
         # Day-specific Adapter
-        self.day_adapter = dayAdapter(
+        self.day_adapter = DayAdapter(
             input_dim=self.config['model']['adapter']['neural_dim'],
             hidden_dim=self.config['model']['adapter']['hidden_dim'],
             dropout_rate=self.config['model']['adapter']['dropout_rate'],

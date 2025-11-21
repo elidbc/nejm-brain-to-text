@@ -4,6 +4,7 @@ experiment:
   output_dir: trained_models/exp1 # directory to save the trained model and logs
   num_training_batches: 120000 # number of training batches to run
   gpu_number: "0"
+  use_amp: true # whether to use automatic mixed precision (AMP) for training
 
 
 model:
@@ -13,7 +14,6 @@ model:
     dropout_rate: 0.2
     output_dim: 512
   gru_decoder:
-    input_dim: 768
     hidden_dim: 768
     num_layers: 5
     dropout_rate: 0.4
