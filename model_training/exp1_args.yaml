@@ -4,7 +4,7 @@ experiment:
   output_dir: trained_models/exp1 # directory to save the trained model and logs
   num_training_batches: 120000 # number of training batches to run
   gpu_number: "0"
-  use_amp: true # whether to use automatic mixed precision (AMP) for training
+  use_amp: True # whether to use automatic mixed precision (AMP) for training
 
 
 model:
@@ -16,10 +16,10 @@ model:
     dropout_rate: 0.2
     output_dim: 512
   gru_decoder:
-    hidden_dim: 768
-    num_layers: 5
+    hidden_dim: 512
+    num_layers: 3
     dropout_rate: 0.4
-    bidirectional: True
+    bidirectional: False
   num_classes: 41
   neural_dim: 512
   patch_size: 14
@@ -38,7 +38,7 @@ dataset:
     smooth_kernel_std: 2 # standard deviation of the smoothing kernel applied to the data
 
   neural_dim: 512 # dimensionality of the neural data
-  batch_size: 4 # batch size for training
+  batch_size: 1 # batch size for training
   n_classes: 41 # number of classes (phonemes) in the dataset
   max_seq_elements: 500 # maximum number of sequence elements (phonemes) for any trial
   days_per_batch: 4 # number of randomly-selected days to include in each batch

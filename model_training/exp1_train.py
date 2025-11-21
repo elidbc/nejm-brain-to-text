@@ -137,7 +137,7 @@ class Exp1Trainer:
             phone_seq_lens = batch['phone_seq_lens'].to(self.device)
             day_indicies = batch['day_indicies'].to(self.device)
 
-            with torch.autocast(device_type = "cuda", enabled = self.config['experiment']['use_amp'], dtype = torch.bfloat16):
+            with torch.autocast(device_type = "cuda", enabled = self.config['experiment']['use_amp'], dtype = torch.float16):
                 # 2. Apply data augmentations, patching, and day-specific adapter
                 x, n_time_steps = self.transform_data(x, n_time_steps, 'train')
                 input_lengths = self._calculate_input_lengths(n_time_steps)
@@ -173,7 +173,7 @@ class Exp1Trainer:
 
             if batch_idx % 1000 == 0:
                 val_per, val_loss = self.validate(val_loader)
-                
+
                 self.history['val_loss'].append(val_loss)
                 self.history['val_per'].append(val_per)
                 self.history['steps'].append(batch_idx)
@@ -194,6 +194,7 @@ class Exp1Trainer:
         Validate the model
         """
         self.model.eval()
+        print(f"--------------------------------")
         print("Running validation...")
 
         total_edit_distance = 0
