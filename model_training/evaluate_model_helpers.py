@@ -6,6 +6,7 @@ import re
 
 from data_augmentations import gauss_smooth
 
+#number of phonemes: 41
 LOGIT_TO_PHONEME = [
     'BLANK',
     'AA', 'AE', 'AH', 'AO', 'AW',
