@@ -29,7 +29,7 @@ class Exp1Trainer:
         self.sessions = config['dataset']['sessions'][:1]
         self.file_paths = [os.path.join(self.data_dir, s, 'data_train.hdf5') for s in self.sessions]
 
-        train_trials, _ = train_test_split_indicies(
+        """train_trials, _ = train_test_split_indicies(
             file_paths=self.file_paths,
             test_percentage=0,
             seed=config['dataset']['seed']
@@ -38,6 +38,12 @@ class Exp1Trainer:
         _, val_trials = train_test_split_indicies(
             file_paths=self.file_paths,
             test_percentage=1,
+            seed=config['dataset']['seed']
+        )"""
+
+        train_trials, val_trials = train_test_split_indicies(
+            file_paths=self.file_paths,
+            test_percentage=config['dataset']['test_percentage'],
             seed=config['dataset']['seed']
         )
 
@@ -188,7 +194,7 @@ class Exp1Trainer:
                 #current_lr = self.scheduler.get_last_lr()[0]
                 print(f"Batch {i} | Loss: {loss.item():.4f}")
 
-            if i % 20 == 0 and i > 1000:
+            if i > 1190:
                 print(f"Batch {i} | Loss: {loss.item():.4f}")
                 
                 # 1. Get the most likely phoneme for each time step (Argmax)
