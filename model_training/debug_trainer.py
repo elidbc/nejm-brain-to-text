@@ -9,6 +9,7 @@ from torch.utils.data import DataLoader
 from dataset import BrainToTextDataset, train_test_split_indicies
 from exp1_model import Exp1Model
 from data_augmentations import gauss_smooth
+from evaluate_model_helpers import LOGIT_TO_PHONEME
 import torchaudio.functional as F
 
 
@@ -23,9 +24,63 @@ class Exp1Trainer:
 
         os.makedirs(self.output_dir, exist_ok=True)
 
+        # data
+        self.data_dir = config['dataset']['dataset_dir']
+        self.sessions = config['dataset']['sessions'][:1]
+        self.file_paths = [os.path.join(self.data_dir, s, 'data_train.hdf5') for s in self.sessions]
+
+        train_trials, _ = train_test_split_indicies(
+            file_paths=self.file_paths,
+            test_percentage=0,
+            seed=config['dataset']['seed']
+        )
+
+        _, val_trials = train_test_split_indicies(
+            file_paths=self.file_paths,
+            test_percentage=1,
+            seed=config['dataset']['seed']
+        )
+
+        self.train_ds = BrainToTextDataset(
+            trial_indicies=train_trials,
+            split='train',
+            days_per_batch = config['dataset']['days_per_batch'],
+            n_batches = config['experiment']['num_training_batches'],
+            batch_size = config['dataset']['batch_size'],
+            must_include_days = config['dataset']['must_include_days'],
+            random_seed = config['experiment']['seed'],
+            feature_subset = config['dataset']['feature_subset'],
+        )
+        self.train_loader = DataLoader(
+            self.train_ds,
+            batch_size = None,
+            shuffle = self.config['dataset']['loader_shuffle'],
+            num_workers = self.config['dataset']['num_dataloader_workers'],
+            pin_memory = True
+        )
+
+        # val dataset and dataloader
+        self.val_dataset = BrainToTextDataset(
+            trial_indicies = val_trials, 
+            split = 'test',
+            days_per_batch = config['dataset']['days_per_batch'],
+            n_batches = None,
+            batch_size = self.config['dataset']['batch_size'],
+            must_include_days = None,
+            random_seed = self.config['dataset']['seed'],
+            feature_subset = self.config['dataset']['feature_subset']   
+            )
+        self.val_loader = DataLoader(
+            self.val_dataset,
+            batch_size = None,
+            shuffle = False, 
+            num_workers = 0,
+            pin_memory = True 
+        )
+
         # optimizer
         self.optimizer = torch.optim.AdamW(model.parameters(), lr=config['model']['lr_min'])
-        self.scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, step_size=50, gamma=0.1)
+        #self.scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, step_size=100, gamma=0.0001)
 
         # objective
         self.ctc_loss = torch.nn.CTCLoss(blank = 0, reduction = 'none', zero_infinity = False)
@@ -94,139 +149,99 @@ class Exp1Trainer:
 # Training Loop
 ########################################################
 
-    def train_single_batch(self, batch):
-        #print("Training single batch...")
-        #print(f"Batch shape: {batch.shape}")
-
-        x = batch['input_features'].to(self.device)
-        print(f"x shape: {x.shape}")
-        labels = batch['seq_class_ids'].to(self.device)
-        print(f"labels shape: {labels.shape}")
-        print(f"labels: {labels[:, :10]}")
-        n_time_steps = batch['n_time_steps'].to(self.device)
-        print(f"n_time_steps shape: {n_time_steps.shape}")
-        phone_seq_lens = batch['phone_seq_lens'].to(self.device)
-        print("--------------------------------")
-        print(f"phone_seq_lens shape: {phone_seq_lens.shape}")
-        print(f"phone_seq_lens: {phone_seq_lens}")
-        day_indicies = batch['day_indicies'].to(self.device)
-        print("--------------------------------")
-        print(f"day_indicies shape: {day_indicies.shape}")
-        print(f"day_indicies: {day_indicies}")
-
-        x, n_time_steps = self.transform_data(x, n_time_steps, 'train')
-        input_lengths = self._calculate_input_lengths(n_time_steps)
-
-        print(f"input_lengths: {input_lengths}")
-        print(f"processing logits...")
-        logits = self.model(x, day_indicies)
-        print(f"logits shape: {logits.shape}")
-        assert logits.shape == (x.shape[0], input_lengths.max(), self.config['model']['num_classes'])
-
-        self.optimizer.zero_grad()
-        log_probs = logits.log_softmax(dim=2).permute(1, 0, 2) # shape: (batch_size, max_seq_length, num_classes)
-        print(f"log_probs shape: {log_probs.shape}")
-        print(f"log_probs first 5 timesteps, first 10 classes: {log_probs[:5, 0, :10]}") 
-        
-        loss = self.ctc_loss(
-            log_probs = log_probs,
-            targets = labels,
-            input_lengths = input_lengths,
-            target_lengths = phone_seq_lens,
-        )
-        print(f"computed loss -> {loss.shape} | loss value: {loss.item()}")
-
-        loss.backward()
-        self.optimizer.step()
-
-        return total_loss.item()
-        
-
-
-    def train(self, train_loader, val_loader):
+    def train(self):
         """
         Train the model
         """
-        print("Starting training...")
         self.model.train()
-
-        # Gradient Accumulation to Address Low VRAM
-        target_batch_size = 64
-        cuda_batch_size = self.config['dataset']['batch_size']
-        accumulation_steps = target_batch_size // cuda_batch_size
-        print(f"Using gradient accumulation with {accumulation_steps} steps")
-        print(f"Target batch size: {target_batch_size} | Effective batch size: {cuda_batch_size}")
         
-        self.optimizer.zero_grad()
-        
-        # Initialize loss accumulator
-        total_loss = 0
-        num_batches = 0
-        step_counter = 0
+        for i, batch in enumerate(self.train_loader):
+            
 
-        for batch_idx, batch in enumerate(train_loader):
-            start_time = time.time()
-
-            # 1. Move data to device
             x = batch['input_features'].to(self.device)
             labels = batch['seq_class_ids'].to(self.device)
             n_time_steps = batch['n_time_steps'].to(self.device)
             phone_seq_lens = batch['phone_seq_lens'].to(self.device)
             day_indicies = batch['day_indicies'].to(self.device)
 
-            with torch.autocast(device_type = "cuda", enabled = self.config['experiment']['use_amp'], dtype = torch.float16):
-                # 2. Apply data augmentations, patching, and day-specific adapter
-                x, n_time_steps = self.transform_data(x, n_time_steps, 'train')
-                input_lengths = self._calculate_input_lengths(n_time_steps)
+            x, n_time_steps = self.transform_data(x, n_time_steps, 'train')
+            adjusted_len = self._calculate_input_lengths(n_time_steps)
 
-                # 3. Forward pass -> phoneme predictions
-                #self.optimizer.zero_grad()
+            logits = self.model(x, day_indicies)
+            log_probs = logits.log_softmax(dim=2).permute(1, 0, 2)
+
+            loss = self.ctc_loss(
+                log_probs = log_probs,
+                targets = labels,
+                input_lengths = adjusted_len,
+                target_lengths = phone_seq_lens
+            )
+            loss = torch.mean(loss)
+
+            self.optimizer.zero_grad()
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(self.model.parameters(), 10.0)
+            self.optimizer.step()
+            #self.scheduler.step()
+
+            if i % 10 == 0:
+                #current_lr = self.scheduler.get_last_lr()[0]
+                print(f"Batch {i} | Loss: {loss.item():.4f}")
+
+            if i % 20 == 0 and i > 1000:
+                print(f"Batch {i} | Loss: {loss.item():.4f}")
+                
+                # 1. Get the most likely phoneme for each time step (Argmax)
+                pred_indices = torch.argmax(logits[0], dim=1).cpu().numpy() # Take first item in batch
+                target_indices = labels[0, :phone_seq_lens[0]].cpu().numpy()
+                
+                # 2. Convert to strings (simple decode, no collapse)
+                # We filter out 0 (Blank) to see if it's predicting ANYTHING other than silence
+                pred_str = " ".join([LOGIT_TO_PHONEME[idx] for idx in pred_indices if idx != 0])
+                target_str = " ".join([LOGIT_TO_PHONEME[idx] for idx in target_indices])
+                
+                print(f"Target: {target_str}")
+                print(f"Pred  : {pred_str}")
+                print("------------------------------------------------")
+
+            if i > 0 and i % 50 == 0:
+                self.val_debug()
+                self.model.train() # Switch back to train mode!
+        
+    def val_debug(self):
+        self.model.eval()
+        val_loss_accum = 0
+        num_batches = 0
+        print("------- Validating -------")
+
+        with torch.no_grad():
+            for batch in self.val_loader:
+                x = batch['input_features'].to(self.device)
+                labels = batch['seq_class_ids'].to(self.device)
+                n_time_steps = batch['n_time_steps'].to(self.device)
+                phone_seq_lens = batch['phone_seq_lens'].to(self.device)
+                day_indicies = batch['day_indicies'].to(self.device)
+
+                x, n_time_steps = self.transform_data(x, n_time_steps, 'val')
+                adjusted_len = self._calculate_input_lengths(n_time_steps)
+
                 logits = self.model(x, day_indicies)
-
-                # 4. Calculate CTC loss
                 log_probs = logits.log_softmax(dim=2).permute(1, 0, 2)
+                
                 loss = self.ctc_loss(
                     log_probs = log_probs,
                     targets = labels,
-                    input_lengths = input_lengths,
-                    target_lengths = phone_seq_lens,
+                    input_lengths = adjusted_len,
+                    target_lengths = phone_seq_lens
                 )
+                val_loss_accum += torch.mean(loss).item()
+                num_batches += 1
+        avg_val_loss = val_loss_accum / max(1, num_batches)
+        print(f"Validation Loss: {avg_val_loss:.4f}")
+        print("--------------------------")
+        
 
-                loss = torch.mean(loss) / accumulation_steps # take mean loss over batches
 
-
-            # 5. Backward pass -> update weights
-            loss.backward()
-            if (batch_idx + 1) % accumulation_steps == 0:
-                torch.nn.utils.clip_grad_norm_(self.model.parameters(), 10.0)
-                self.optimizer.step()
-                self.scheduler.step()
-                self.optimizer.zero_grad()
-                step_counter += 1
-                if step_counter % 16 == 0:
-                    lr = self.scheduler.get_last_lr()[0]
-                    raw_loss = loss.item() * accumulation_steps
-                    self.history['train_loss'].append(raw_loss)
-                    print(f"Step: {batch_idx} | Loss: {raw_loss:.4f} | Lr: {lr:.6f} | Time: {time.time() - start_time:.2f}s")
-
-            #if batch_idx % 1000 == 0:
-            if (batch_idx + 1) % accumulation_steps == 0 and step_counter % 100 == 0:
-                val_per, val_loss = self.validate(val_loader)
-
-                self.history['val_loss'].append(val_loss)
-                self.history['val_per'].append(val_per)
-                self.history['steps'].append(batch_idx)
-                
-                self.save_checkpoint(batch_idx, val_per, filename="checkpoint_latest.pt")
-
-                if val_per < self.best_val_per:
-                    print(f"New best PER: {val_per:.4f}")
-                    self.best_val_per = val_per
-                    self.save_checkpoint(batch_idx, val_per, filename="checkpoint_best.pt")
-
-                with open(os.path.join(self.output_dir, 'history.pkl'), 'wb') as f:
-                    pickle.dump(self.history, f)
-                self.model.train()
 
     def validate(self, val_loader):
         """
@@ -314,69 +329,17 @@ def debug_trainer():
     config = load_config('debug.yaml')
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
-
-    data_dir = config['dataset']['dataset_dir']
-
-    sessions = config['dataset']['sessions'][:1]
-    file_paths = [os.path.join(data_dir, s, 'data_train.hdf5') for s in sessions]
-
-    train_trials, val_trials = train_test_split_indicies(
-        file_paths=file_paths,
-        test_percentage=config['dataset']['test_percentage'],
-        seed=config['dataset']['seed']
-    )
-    print(f"Split into: {len(train_trials[0]['trials'])} training trials: {train_trials[0]['trials'][:15]}")
-    print(f"Split into: {len(val_trials[0]['trials'])} val trias: {val_trials[0]['trials'][:15]}")
-
-
-    train_ds = BrainToTextDataset(
-        trial_indicies=train_trials,
-        split='train',
-        days_per_batch=config['dataset']['days_per_batch'],
-        n_batches=config['experiment']['num_training_batches'],
-        batch_size=config['dataset']['batch_size'],
-        must_include_days=config['dataset']['must_include_days'],
-        random_seed=config['experiment']['seed'],
-        feature_subset=config['dataset']['feature_subset'],
-    )
-    print(f"train_ds num batches: {train_ds.n_batches} | batch size: {train_ds.batch_size}")
-    #print(f"trial indicies for train_ds: {train_ds.trial_indicies}")
-
-    train_loader = DataLoader(
-        train_ds,
-        batch_size=None,
-        shuffle=config['dataset']['loader_shuffle'],
-        num_workers=config['dataset']['num_dataloader_workers'],
-        pin_memory=True
-    )
+    
     model = Exp1Model(config, num_days=1)
     print(f"Model initialized | Number of parameters: {sum(p.numel() for p in model.parameters())}")
     print(f"Number of adapters: {len(model.day_adapter.adapters)} | Adapter parameters: {sum(p.numel() for p in model.day_adapter.adapters.parameters())}")
     print(f"Gru parameters: {sum(p.numel() for p in model.gru_decoder.parameters())}")
     print(f"Classifier parameters: {sum(p.numel() for p in model.classifier.parameters())}")
-    batch = next(iter(train_loader))
+
     trainer = Exp1Trainer(model, config, device)
-    loss = trainer.train_single_batch(batch) # 
-
-
-    for i in range(1):
-        print(f"Train loader input_features shape: {next(iter(train_loader))['input_features'].shape}")
-        print(f"Train loader seq_class_ids shape: {next(iter(train_loader))['seq_class_ids'].shape}")
-
+    trainer.train()
     return
-    model = Exp1Model(config, num_days=1)
-    print(f"Model initialized | Number of parameters: {sum(p.numel() for p in model.parameters())}")
-    print(f"Number of adapters: {len(model.day_adapter.adapters)} | Adapter parameters: {sum(p.numel() for p in model.day_adapter.adapters.parameters())}")
-    print(f"Gru parameters: {sum(p.numel() for p in model.gru_decoder.parameters())}")
-    print(f"Classifier parameters: {sum(p.numel() for p in model.classifier.parameters())}")
-    batches = [next(iter(train_loader)) for _ in range(2)]
-    trainer = Exp1Trainer(model, config, device)
-    for i in range(3000):
-        loss = trainer.train_single_batch(batches)
-        if i % 50 == 0:
-            print(f"Step: {i} | Loss: {loss:.4f}")
-        if i % 500 == 0:
-            print(f"Learning rate: {trainer.scheduler.get_last_lr()[0]:.6f}")
+    
 
 
 
