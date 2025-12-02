@@ -26,7 +26,7 @@ class Exp1Trainer:
 
         # data
         self.data_dir = config['dataset']['dataset_dir']
-        self.sessions = config['dataset']['sessions'][:1]
+        self.sessions = config['dataset']['sessions'][:2]
         self.file_paths = [os.path.join(self.data_dir, s, 'data_train.hdf5') for s in self.sessions]
 
         """train_trials, _ = train_test_split_indicies(
@@ -57,6 +57,7 @@ class Exp1Trainer:
             random_seed = config['experiment']['seed'],
             feature_subset = config['dataset']['feature_subset'],
         )
+
         self.train_loader = DataLoader(
             self.train_ds,
             batch_size = None,
@@ -194,7 +195,7 @@ class Exp1Trainer:
                 #current_lr = self.scheduler.get_last_lr()[0]
                 print(f"Batch {i} | Loss: {loss.item():.4f}")
 
-            if i > 1190:
+            if i > 1997:
                 print(f"Batch {i} | Loss: {loss.item():.4f}")
                 
                 # 1. Get the most likely phoneme for each time step (Argmax)
@@ -206,22 +207,27 @@ class Exp1Trainer:
                 pred_str = " ".join([LOGIT_TO_PHONEME[idx] for idx in pred_indices if idx != 0])
                 target_str = " ".join([LOGIT_TO_PHONEME[idx] for idx in target_indices])
                 
-                print(f"Target: {target_str}")
-                print(f"Pred  : {pred_str}")
+                print(f"Target (train)t: {target_str}")
+                print(f"Pred (train): {pred_str}")
                 print("------------------------------------------------")
 
             if i > 0 and i % 50 == 0:
-                self.val_debug()
+                if i > 1949:
+                    self.val_debug(print_preds = True)
+                else:
+                    self.val_debug(print_preds = False)
                 self.model.train() # Switch back to train mode!
+
+
         
-    def val_debug(self):
+    def val_debug(self, print_preds = False):
         self.model.eval()
         val_loss_accum = 0
         num_batches = 0
         print("------- Validating -------")
 
         with torch.no_grad():
-            for batch in self.val_loader:
+            for i, batch in enumerate(self.val_loader):
                 x = batch['input_features'].to(self.device)
                 labels = batch['seq_class_ids'].to(self.device)
                 n_time_steps = batch['n_time_steps'].to(self.device)
@@ -242,6 +248,18 @@ class Exp1Trainer:
                 )
                 val_loss_accum += torch.mean(loss).item()
                 num_batches += 1
+                if i == 0 or i == 1 and print_preds:
+                    pred_indices = torch.argmax(logits[0], dim=1).cpu().numpy() # Take first item in batch
+                    target_indices = labels[0, :phone_seq_lens[0]].cpu().numpy()
+                    
+                    # 2. Convert to strings (simple decode, no collapse)
+                    # We filter out 0 (Blank) to see if it's predicting ANYTHING other than silence
+                    pred_str = " ".join([LOGIT_TO_PHONEME[idx] for idx in pred_indices if idx != 0])
+                    target_str = " ".join([LOGIT_TO_PHONEME[idx] for idx in target_indices])
+                    
+                    print(f"Val Target: {target_str}")
+                    print(f"Val Pred  : {pred_str}")
+                    #print("------------------------------------------------")
         avg_val_loss = val_loss_accum / max(1, num_batches)
         print(f"Validation Loss: {avg_val_loss:.4f}")
         print("--------------------------")
@@ -336,7 +354,7 @@ def debug_trainer():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
     
-    model = Exp1Model(config, num_days=1)
+    model = Exp1Model(config, num_days=2)
     print(f"Model initialized | Number of parameters: {sum(p.numel() for p in model.parameters())}")
     print(f"Number of adapters: {len(model.day_adapter.adapters)} | Adapter parameters: {sum(p.numel() for p in model.day_adapter.adapters.parameters())}")
     print(f"Gru parameters: {sum(p.numel() for p in model.gru_decoder.parameters())}")

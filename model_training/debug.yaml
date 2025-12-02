@@ -2,7 +2,7 @@ experiment:
   name: "debugging"
   seed: 42
   output_dir: trained_models/exp1 # directory to save the trained model and logs
-  num_training_batches: 1200 # number of training batches to run (originally 120000)
+  num_training_batches: 2000 # number of training batches to run (originally 120000)
   gpu_number: "0"
   use_amp: True # whether to use automatic mixed precision (AMP) for training
 
@@ -41,7 +41,7 @@ dataset:
   batch_size: 64 # batch size for training
   n_classes: 41 # number of classes (phonemes) in the dataset
   max_seq_elements: 500 # maximum number of sequence elements (phonemes) for any trial
-  days_per_batch: 1 # number of randomly-selected days to include in each batch
+  days_per_batch: 2 # number of randomly-selected days to include in each batch
   seed: 1 # random seed for reproducibility
   num_dataloader_workers: 4 # number of workers for the data loader
   loader_shuffle: false # whether to shuffle the data loader
