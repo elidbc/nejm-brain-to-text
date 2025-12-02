@@ -27,7 +27,7 @@ model:
   # Output dim MUST be 512 to match baseline day layer output
   adapter:
     neural_dim: 512   # input dimensionality of neural data
-    hidden_dim: 256   # hidden layer size in adapter MLP
+    hidden_dim: 512   # hidden layer size in adapter MLP
     dropout_rate: 0.2
     output_dim: 512   # MUST match baseline (512) for GRU input compatibility
 
