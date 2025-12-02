@@ -5,6 +5,7 @@ import os
 import numpy as np
 import pickle
 import yaml
+import wandb
 from torch.utils.data import DataLoader
 from dataset import BrainToTextDataset, train_test_split_indicies
 from exp1_model import Exp1Model
@@ -17,8 +18,24 @@ class Exp1Trainer:
         self.config = config
         self.device = device
         self.output_dir = self.config['experiment']['output_dir']
+        self.wandb_run = wandb.init(
+            project="brain-to-text-exp1",
+            config=config,
+            name=self.config['experiment']['name']
+        )
 
         os.makedirs(self.output_dir, exist_ok=True)
+
+        # Gradient Accumulation Settings
+        # Compute at init time so scheduler T_max is set correctly
+        # Effective batch size = target_batch_size, achieved by accumulating gradients
+        # over (target_batch_size / cuda_batch_size) mini-batches
+        target_batch_size = self.config['experiment']['target_batch_size']
+        cuda_batch_size = self.config['experiment']['cuda_batch_size']
+        self.accumulation_steps = target_batch_size // cuda_batch_size
+        # Number of optimizer steps = num_training_batches / accumulation_steps
+        self.num_optimizer_steps = self.config['experiment']['num_training_batches'] // self.accumulation_steps
+        print(f"Gradient accumulation: {self.accumulation_steps} steps, {self.num_optimizer_steps} optimizer updates")
 
         # Params and Optimizer
         bias_params = [p for name, p in self.model.named_parameters() if 'bias' in name]
@@ -34,9 +51,11 @@ class Exp1Trainer:
         ])
         
         # Learning Rate Scheduler
+        # T_max is set to num_optimizer_steps (not num_training_batches) because
+        # scheduler.step() is called once per gradient accumulation cycle, not once per batch
         self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
             self.optimizer,
-            T_max = self.config['experiment']['num_training_batches'],
+            T_max = self.num_optimizer_steps,
             eta_min = self.config['model']['lr_min'],
         )
 
@@ -116,12 +135,10 @@ class Exp1Trainer:
         print("Starting training...")
         self.model.train()
 
-        # Gradient Accumulation to Address Low VRAM
-        target_batch_size = 64
-        cuda_batch_size = self.config['dataset']['batch_size']
-        accumulation_steps = target_batch_size // cuda_batch_size
+        # Use accumulation_steps computed at init time (ensures scheduler T_max is consistent)
+        accumulation_steps = self.accumulation_steps
         print(f"Using gradient accumulation with {accumulation_steps} steps")
-        print(f"Target batch size: {target_batch_size} | Effective batch size: {cuda_batch_size}")
+        print(f"Target batch size: {self.config['experiment']['target_batch_size']} | CUDA batch size: {self.config['experiment']['cuda_batch_size']}")
         
         self.optimizer.zero_grad()
         
@@ -173,6 +190,11 @@ class Exp1Trainer:
                     lr = self.scheduler.get_last_lr()[0]
                     raw_loss = loss.item() * accumulation_steps
                     self.history['train_loss'].append(raw_loss)
+                    wandb.log({
+                        "train_loss": raw_loss,
+                        "learning_rate": lr,
+                        "epoch": batch_idx / accumulation_steps 
+                    })
                     print(f"Step: {batch_idx} | Loss: {raw_loss:.4f} | Lr: {lr:.6f} | Time: {time.time() - start_time:.2f}s")
 
             #if batch_idx % 1000 == 0:
@@ -253,6 +275,10 @@ class Exp1Trainer:
 
         avg_per = total_edit_distance / total_length
         avg_val_loss = total_val_loss / num_batches
+        wandb.log({
+            "val_loss": avg_val_loss,
+            "val_per": avg_per
+        })
         print(f"Validation PER: {avg_per:.4f} | Validation Loss: {avg_val_loss:.4f}")
         return avg_per, avg_val_loss
 
@@ -283,15 +309,25 @@ def main():
     print(f"Using device: {device}")
 
     # 2. Prepare Data Splits
+    # CHANGED: Use separate data_train.hdf5 and data_val.hdf5 files to match baseline trainer
+    # This ensures validation is on truly held-out data (same split as baseline experiments)
+    # Previously: split data_train.hdf5 into train/val using test_percentage
     data_dir = config['dataset']['dataset_dir']
-    # try with only one session
-    sessions = config['dataset']['sessions'][:1]
-    file_paths = [os.path.join(data_dir, s, 'data_train.hdf5') for s in sessions]
+    sessions = config['dataset']['sessions']
     
-    # Create train/val splits using dataset.py
-    train_trials, val_trials = train_test_split_indicies(
-        file_paths=file_paths,
-        test_percentage=config['dataset']['test_percentage'],
+    # Training data: use all trials from data_train.hdf5 (test_percentage=0 means keep all for train)
+    train_file_paths = [os.path.join(data_dir, s, 'data_train.hdf5') for s in sessions]
+    train_trials, _ = train_test_split_indicies(
+        file_paths=train_file_paths,
+        test_percentage=0,  # Keep all trials for training
+        seed=config['dataset']['seed']
+    )
+    
+    # Validation data: use all trials from data_val.hdf5 (test_percentage=1 means all go to val)
+    val_file_paths = [os.path.join(data_dir, s, 'data_val.hdf5') for s in sessions]
+    _, val_trials = train_test_split_indicies(
+        file_paths=val_file_paths,
+        test_percentage=1,  # All trials go to validation
         seed=config['dataset']['seed']
     )
 
@@ -338,8 +374,7 @@ def main():
     print(f"Initialized datasets and data loaders")
 
     # 5. Initialize Model, Trainer, and Start Training
-    #model = Exp1Model(config, num_days=config['dataset']['n_sessions'])
-    model = Exp1Model(config, num_days=1)
+    model = Exp1Model(config, num_days=config['dataset']['n_sessions'])
     print(f"Initialized model — number of parameters: {sum(p.numel() for p in model.parameters())}")
     print(f"Adapter parameters: {sum(p.numel() for p in model.day_adapter.adapters.parameters())}")
     print(f"Gru parameters: {sum(p.numel() for p in model.gru_decoder.parameters())}")

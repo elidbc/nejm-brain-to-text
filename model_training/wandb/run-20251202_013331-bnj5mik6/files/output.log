@@ -1,0 +1,8 @@
+Gradient accumulation: 16 steps, 12500 optimizer updates
+Starting training...
+Using gradient accumulation with 16 steps
+Target batch size: 64 | CUDA batch size: 4
+Step: 255 | Loss: 71.3903 | Lr: 0.001000 | Time: 0.27s
+Step: 511 | Loss: 105.9218 | Lr: 0.001000 | Time: 0.09s
+Step: 767 | Loss: 105.0802 | Lr: 0.001000 | Time: 0.30s
+Step: 1023 | Loss: 112.6283 | Lr: 0.001000 | Time: 0.08s

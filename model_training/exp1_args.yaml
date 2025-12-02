@@ -2,9 +2,15 @@ experiment:
   name: "mlp_adapter_v1"
   seed: 42
   output_dir: trained_models/exp1 # directory to save the trained model and logs
-  num_training_batches: 5000 # number of training batches to run (originally 120000)
+  num_training_batches: 200000 # number of training batches to run (originally 120000)
   gpu_number: "0"
   use_amp: True # whether to use automatic mixed precision (AMP) for training
+  
+  # Gradient accumulation settings for training on smaller GPUs
+  # Effective batch size = target_batch_size, achieved by accumulating gradients
+  # over (target_batch_size / cuda_batch_size) mini-batches
+  target_batch_size: 64 # effective batch size after gradient accumulation
+  cuda_batch_size: 4 # batch size that fits in GPU memory (should match dataset.batch_size)
 
 
 model:
@@ -19,7 +25,7 @@ model:
     hidden_dim: 512
     num_layers: 3
     dropout_rate: 0.4
-    bidirectional: False
+    bidirectional: True
   num_classes: 41
   neural_dim: 512
   patch_size: 14
@@ -38,10 +44,10 @@ dataset:
     smooth_kernel_std: 2 # standard deviation of the smoothing kernel applied to the data
 
   neural_dim: 512 # dimensionality of the neural data
-  batch_size: 1 # batch size for training
+  batch_size: 4 # batch size for training
   n_classes: 41 # number of classes (phonemes) in the dataset
   max_seq_elements: 500 # maximum number of sequence elements (phonemes) for any trial
-  days_per_batch: 1 # number of randomly-selected days to include in each batch
+  days_per_batch: 4 # number of randomly-selected days to include in each batch
   seed: 1 # random seed for reproducibility
   num_dataloader_workers: 4 # number of workers for the data loader
   loader_shuffle: false # whether to shuffle the data loader

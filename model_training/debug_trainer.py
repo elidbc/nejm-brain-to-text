@@ -363,22 +363,19 @@ def debug_trainer():
     trainer = Exp1Trainer(model, config, device)
     trainer.train()
     return
-    
-
-
 
 
 def main():
     # 1. Load Configuration
-    debug_trainer()
-    """config = load_config('exp1_args.yaml')
+    #debug_trainer()
+    config = load_config('exp1_args.yaml')
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
     # 2. Prepare Data Splits
     data_dir = config['dataset']['dataset_dir']
     # try with only one session
-    sessions = config['dataset']['sessions'][:1]
+    sessions = config['dataset']['sessions']
     file_paths = [os.path.join(data_dir, s, 'data_train.hdf5') for s in sessions]
     
     # Create train/val splits using dataset.py
@@ -432,13 +429,13 @@ def main():
 
     # 5. Initialize Model, Trainer, and Start Training
     #model = Exp1Model(config, num_days=config['dataset']['n_sessions'])
-    model = Exp1Model(config, num_days=1)
+    model = Exp1Model(config, num_days=config['dataset']['n_sessions'])
     print(f"Initialized model — number of parameters: {sum(p.numel() for p in model.parameters())}")
     print(f"Adapter parameters: {sum(p.numel() for p in model.day_adapter.adapters.parameters())}")
     print(f"Gru parameters: {sum(p.numel() for p in model.gru_decoder.parameters())}")
     print(f"Classifier parameters: {sum(p.numel() for p in model.classifier.parameters())}")
     trainer = Exp1Trainer(model, config, device)
-    trainer.train(train_loader, val_loader)"""
+    trainer.train(train_loader, val_loader)
 
 if __name__ == "__main__":
     main()
