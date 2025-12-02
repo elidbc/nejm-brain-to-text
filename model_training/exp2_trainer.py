@@ -90,10 +90,18 @@ class Exp2Trainer:
         # Learning Rate Scheduler
         # T_max is set to num_optimizer_steps (not num_training_batches) because
         # scheduler.step() is called once per gradient accumulation cycle, not once per batch
-        self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-            self.optimizer,
-            T_max = self.num_optimizer_steps,
-            eta_min = self.config['model']['lr_min'],
+        # self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+        #     self.optimizer,
+        #     T_max = self.num_optimizer_steps,
+        #     eta_min = self.config['model']['lr_min'],
+        # )
+
+        adapter_lambda = lambda step: 0.5 * (1 + math.cos(math.pi * step / self.num_optimizer_steps))
+        gru_lambda = lambda step: 1.0
+
+        self.scheduler = torch.optim.lr_scheduler.LambdaLR(
+            self.optimizer, 
+            lr_lambda=[adapter_lambda, gru_lambda]
         )
 
         # Loss
