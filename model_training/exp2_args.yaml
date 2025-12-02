@@ -10,6 +10,9 @@ experiment:
   # Set pretrained_ckpt_path to load baseline RNN weights for GRU and classifier
   # Set freeze_gru to True to only train day_adapter weights
   pretrained_ckpt_path: "../data/t15_pretrained_rnn_baseline/checkpoint/best_checkpoint"
+  ckpt_type: "pretrained"  # "pretrained" for baseline RNN checkpoint, "exp" for exp2 checkpoint
+  mlp_ckpt_path: "trained_models/exp2/checkpoint/best_checkpoint"
+  
   freeze_gru: True
   
   # Gradient accumulation settings for training on smaller GPUs
@@ -22,6 +25,7 @@ experiment:
 model:
   lr_min: 0.0001
   lr_max_day: 0.005  # learning rate for day adapter weights
+  lr_max_gru: 0.0005  # learning rate for GRU weights (lower than adapters for fine-tuning)
   
   # Day-specific adapter: projects neural features to common latent space
   # Output dim MUST be 512 to match baseline day layer output

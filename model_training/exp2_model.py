@@ -62,7 +62,7 @@ class Exp2Model(nn.Module):
     Primary model combining DayAdapter and pretrained GRU.
     Handles weight loading and optional freezing of GRU.
     """
-    def __init__(self, config, num_days, pretrained_ckpt_path=None, freeze_gru=True):
+    def __init__(self, config, num_days, pretrained_ckpt_path=None, ckpt_type="pretrained", freeze_gru=True):
         super().__init__()
         self.config = config
 
@@ -98,7 +98,7 @@ class Exp2Model(nn.Module):
 
         # --- Load pretrained weights ---
         if pretrained_ckpt_path is not None:
-            self.load_pretrained_weights(pretrained_ckpt_path)
+            self.load_pretrained_weights(pretrained_ckpt_path, ckpt_type)
 
         # --- Optionally freeze GRU and classifier ---
         if freeze_gru:
@@ -111,23 +111,50 @@ class Exp2Model(nn.Module):
             nn.init.eye_(adapter[0].weight)
             nn.init.zeros_(adapter[0].bias)
 
-    def load_pretrained_weights(self, ckpt_path):
+    def load_pretrained_weights(self, ckpt_path, ckpt_type="pretrained"):
         """
-        Load pretrained baseline model weights for GRU + classifier only.
+        Load pretrained weights from either baseline or exp2 checkpoint format.
         
-        The baseline model (rnn_model.py) has a different structure:
-        - Baseline: _orig_mod.gru.* → Exp2: gru_decoder.gru.*
-        - Baseline: _orig_mod.out.* → Exp2: classifier.*
-        - Baseline: _orig_mod.h0 → stored for learnable initial hidden state (not used in Exp2)
-        - Baseline: _orig_mod.day_weights/day_biases → skipped (Exp2 uses different adapter)
+        Args:
+            ckpt_path: Path to the checkpoint file
+            ckpt_type: "pretrained" for baseline RNN checkpoint, "exp" for exp2 checkpoint
+        
+        Checkpoint formats:
+        1. "pretrained" - Baseline format (rnn_model.py):
+           - Key: 'model_state_dict' with '_orig_mod.' prefix
+           - Mapping: gru.* → gru_decoder.gru.*, out.* → classifier.*
+        
+        2. "exp" - Exp2 format (this model):
+           - Key: 'model' (no prefix)
+           - Direct loading of matching keys
         """
-        baseline_ckpt = torch.load(ckpt_path, map_location='cpu', weights_only=False)
-        baseline_state_dict = baseline_ckpt['model_state_dict']
+        ckpt = torch.load(ckpt_path, map_location='cpu', weights_only=False)
         current_state_dict = self.state_dict()
-        
-        # Build mapping from baseline keys to exp2 keys
         loaded_keys = []
-        for baseline_key, baseline_val in baseline_state_dict.items():
+        
+        if ckpt_type == "pretrained":
+            print(f"Loading baseline (pretrained) checkpoint format")
+            source_state_dict = ckpt['model_state_dict']
+            loaded_keys = self._load_baseline_format(source_state_dict, current_state_dict)
+        elif ckpt_type == "exp":
+            print(f"Loading exp2 checkpoint format")
+            source_state_dict = ckpt['model']
+            loaded_keys = self._load_exp2_format(source_state_dict, current_state_dict)
+        else:
+            raise ValueError(f"Unknown ckpt_type: {ckpt_type}. Must be 'pretrained' or 'exp'")
+        
+        self.load_state_dict(current_state_dict)
+        print(f"Loaded {len(loaded_keys)} pretrained weights from {ckpt_path}")
+        for k in loaded_keys:
+            print(f"  {k}")
+    
+    def _load_baseline_format(self, source_state_dict, current_state_dict):
+        """
+        Load from baseline checkpoint format (rnn_model.py).
+        Maps: _orig_mod.gru.* → gru_decoder.gru.*, _orig_mod.out.* → classifier.*
+        """
+        loaded_keys = []
+        for baseline_key, baseline_val in source_state_dict.items():
             # Strip _orig_mod. prefix if present (from torch.compile)
             clean_key = baseline_key.replace('_orig_mod.', '')
             
@@ -160,10 +187,32 @@ class Exp2Model(nn.Module):
             else:
                 print(f"  Key {exp2_key} not found in Exp2Model")
         
-        self.load_state_dict(current_state_dict)
-        print(f"Loaded {len(loaded_keys)} pretrained weights from {ckpt_path}")
-        for k in loaded_keys:
-            print(f"  {k}")
+        return loaded_keys
+    
+    def _load_exp2_format(self, source_state_dict, current_state_dict):
+        """
+        Load from exp2 checkpoint format (this model).
+        Loads GRU and classifier weights directly (keys already match).
+        Skips day_adapter weights (will be trained fresh or loaded separately).
+        """
+        loaded_keys = []
+        for key, val in source_state_dict.items():
+            # Only load GRU and classifier weights
+            if not (key.startswith('gru_decoder') or key.startswith('classifier')):
+                continue
+            
+            if key in current_state_dict:
+                if current_state_dict[key].shape == val.shape:
+                    current_state_dict[key] = val
+                    loaded_keys.append(key)
+                else:
+                    print(f"  Shape mismatch for {key}: "
+                          f"expected {current_state_dict[key].shape}, "
+                          f"got {val.shape}")
+            else:
+                print(f"  Key {key} not found in Exp2Model")
+        
+        return loaded_keys
 
     def _apply_patching(self, x):
         """

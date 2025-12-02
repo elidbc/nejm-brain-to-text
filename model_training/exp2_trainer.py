@@ -44,32 +44,48 @@ class Exp2Trainer:
         # When freeze_gru=True, GRU and classifier params have requires_grad=False
         trainable_params = [(name, p) for name, p in self.model.named_parameters() if p.requires_grad]
         
+        # Build parameter groups based on freeze_gru setting
+        lr_adapter = self.config['model']['lr_max_day']
+        lr_gru = self.config['model'].get('lr_max_gru', lr_adapter * 0.1)
+        
+        # Separate params by component and bias/weight for proper weight decay
+        adapter_bias_params = [p for name, p in trainable_params if 'day_adapter' in name and 'bias' in name]
+        adapter_weight_params = [p for name, p in trainable_params if 'day_adapter' in name and 'bias' not in name]
+        gru_bias_params = [p for name, p in trainable_params if 'gru_decoder' in name and 'bias' in name]
+        gru_weight_params = [p for name, p in trainable_params if 'gru_decoder' in name and 'bias' not in name]
+        classifier_bias_params = [p for name, p in trainable_params if 'classifier' in name and 'bias' in name]
+        classifier_weight_params = [p for name, p in trainable_params if 'classifier' in name and 'bias' not in name]
+        
+        # Build param groups list
+        param_groups = [
+            {'params': adapter_bias_params, 'weight_decay': 0.0, 'lr': lr_adapter},
+            {'params': adapter_weight_params, 'weight_decay': 0.01, 'lr': lr_adapter},
+        ]
+        
         if self.freeze_gru:
-            # Only train adapter parameters (GRU and classifier are frozen)
             print("GRU frozen: training only day_adapter parameters")
-            adapter_bias_params = [p for name, p in trainable_params if 'day_adapter' in name and 'bias' in name]
-            adapter_weight_params = [p for name, p in trainable_params if 'day_adapter' in name and 'bias' not in name]
-            
-            self.optimizer = torch.optim.AdamW([
-                {'params': adapter_bias_params, 'weight_decay': 0.0},
-                {'params': adapter_weight_params, 'weight_decay': 0.01, 'lr': self.config['model']['lr_max_day']},
-            ])
-            print(f"  Adapter bias params: {sum(p.numel() for p in adapter_bias_params)}")
-            print(f"  Adapter weight params: {sum(p.numel() for p in adapter_weight_params)}")
+            print(f"  Adapter LR: {lr_adapter}")
         else:
-            # Train all parameters
             print("Training all parameters (GRU not frozen)")
-            bias_params = [p for name, p in trainable_params if 'bias' in name]
-            adapter_params = [p for name, p in trainable_params if 'day_adapter' in name and 'bias' not in name]
-            gru_params = [p for name, p in trainable_params if 'gru_decoder' in name and 'bias' not in name]
-            classifier_params = [p for name, p in trainable_params if 'classifier' in name and 'bias' not in name]
-
-            self.optimizer = torch.optim.AdamW([
-                {'params': bias_params, 'weight_decay': 0.0},
-                {'params': adapter_params, 'weight_decay': 0.01, 'lr': self.config['model']['lr_max_day']},
-                {'params': gru_params, 'weight_decay': 0.01},
-                {'params': classifier_params, 'weight_decay': 0.01},
+            print(f"  Adapter LR: {lr_adapter}, GRU/Classifier LR: {lr_gru}")
+            param_groups.extend([
+                {'params': gru_bias_params, 'weight_decay': 0.0, 'lr': lr_gru},
+                {'params': gru_weight_params, 'weight_decay': 0.01, 'lr': lr_gru},
+                {'params': classifier_bias_params, 'weight_decay': 0.0, 'lr': lr_gru},
+                {'params': classifier_weight_params, 'weight_decay': 0.01, 'lr': lr_gru},
             ])
+        
+        # Filter out empty param groups
+        param_groups = [pg for pg in param_groups if len(pg['params']) > 0]
+        
+        # Create optimizer
+        self.optimizer = torch.optim.AdamW(param_groups)
+        
+        # Log parameter counts
+        print(f"  Adapter params: {sum(p.numel() for p in adapter_bias_params + adapter_weight_params):,}")
+        if not self.freeze_gru:
+            print(f"  GRU params: {sum(p.numel() for p in gru_bias_params + gru_weight_params):,}")
+            print(f"  Classifier params: {sum(p.numel() for p in classifier_bias_params + classifier_weight_params):,}")
         
         # Learning Rate Scheduler
         # T_max is set to num_optimizer_steps (not num_training_batches) because
@@ -414,12 +430,16 @@ def main():
 
     # 5. Initialize Model with optional pretrained weights
     pretrained_ckpt = config['experiment'].get('pretrained_ckpt_path', None)
+    ckpt_type = config['experiment'].get('ckpt_type', 'pretrained')
+    mlp_ckpt = config['experiment'].get('mlp_ckpt_path', None)
+
     freeze_gru = config['experiment'].get('freeze_gru', False)
     
     model = Exp2Model(
         config=config, 
         num_days=config['dataset']['n_sessions'],
         pretrained_ckpt_path=pretrained_ckpt,
+        ckpt_type=ckpt_type,
         freeze_gru=freeze_gru
     )
     
