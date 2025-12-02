@@ -223,19 +223,22 @@ class Exp2Trainer:
                 self.scheduler.step()
                 self.optimizer.zero_grad()
                 step_counter += 1
-                if step_counter % 16 == 0:
-                    lr = self.scheduler.get_last_lr()[0]
-                    raw_loss = loss.item() * accumulation_steps
-                    self.history['train_loss'].append(raw_loss)
-                    wandb.log({
-                        "train_loss": raw_loss,
-                        "learning_rate": lr,
-                        "epoch": batch_idx / accumulation_steps 
-                    })
-                    print(f"Step: {batch_idx} | Loss: {raw_loss:.4f} | Lr: {lr:.6f} | Time: {time.time() - start_time:.2f}s")
 
-            #if batch_idx % 1000 == 0:
-            if (batch_idx + 1) % accumulation_steps == 0 and step_counter % 100 == 0:
+            # Log training progress every 100 batches
+            if (batch_idx + 1) % 100 == 0:
+                lr = self.scheduler.get_last_lr()[0]
+                raw_loss = loss.item() * accumulation_steps
+                self.history['train_loss'].append(raw_loss)
+                wandb.log({
+                    "train_loss": raw_loss,
+                    "learning_rate": lr,
+                    "batch": batch_idx + 1,
+                    "step": step_counter,
+                })
+                print(f"Batch {batch_idx + 1:>5} | Step {step_counter:>4} | Loss: {raw_loss:.4f} | LR: {lr:.6f} | Time: {time.time() - start_time:.2f}s")
+
+            # Run validation every 300 batches
+            if (batch_idx + 1) % 300 == 0:
                 val_per, val_loss = self.validate(val_loader)
 
                 self.history['val_loss'].append(val_loss)
@@ -436,7 +439,7 @@ def main():
     model = Exp2Model(
         config=config, 
         num_days=config['dataset']['n_sessions'],
-        pretrained_ckpt_path=cpt_path,
+        pretrained_ckpt_path=ckpt_path,
         ckpt_type=ckpt_type,
         freeze_gru=freeze_gru
     )
