@@ -226,16 +226,19 @@ class Exp2Trainer:
 
             # Log training progress every 100 batches
             if (batch_idx + 1) % 100 == 0:
-                lr = self.scheduler.get_last_lr()[0]
+                lrs = self.scheduler.get_last_lr()
+                lr_adapter = lrs[0]
+                lr_gru = lrs[2] if not self.freeze_gru else 0.0
                 raw_loss = loss.item() * accumulation_steps
                 self.history['train_loss'].append(raw_loss)
                 wandb.log({
                     "train_loss": raw_loss,
-                    "learning_rate": lr,
+                    "lr_adapter": lr_adapter,
+                    "lr_gru": lr_gru,
                     "batch": batch_idx + 1,
                     "step": step_counter,
                 })
-                print(f"Batch {batch_idx + 1:>5} | Step {step_counter:>4} | Loss: {raw_loss:.4f} | LR: {lr:.6f} | Time: {time.time() - start_time:.2f}s")
+                print(f"Batch {batch_idx + 1:>5} | Loss: {raw_loss:.4f} | Step {step_counter:>4} | AdpLR: {lr_adapter:.6f} | GruLR: {lr_gru:.6f}")
 
             # Run validation every 300 batches
             if (batch_idx + 1) % 300 == 0:

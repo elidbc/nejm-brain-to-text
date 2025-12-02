@@ -2,7 +2,7 @@ experiment:
   name: "exp2_pretrained_gru_adapter"
   seed: 42
   output_dir: trained_models/exp2  # directory to save the trained model and logs
-  num_training_batches: 30000  # number of training batches to run
+  num_training_batches: 70000  # number of training batches to run
   gpu_number: "0"
   use_amp: True  # whether to use automatic mixed precision (AMP) for training
   
@@ -11,7 +11,7 @@ experiment:
   # Set freeze_gru to True to only train day_adapter weights
   pretrained_ckpt_path: "../data/t15_pretrained_rnn_baseline/checkpoint/best_checkpoint"
   ckpt_type: "exp2"  # "pretrained" for baseline RNN checkpoint, "exp" for exp2 checkpoint
-  mlp_ckpt_path: "trained_models/exp2/checkpoint_best_phase1.pt"
+  mlp_ckpt_path: "trained_models/exp2/checkpoint_best_phase2.pt"
   
   freeze_gru: False
   
@@ -25,7 +25,7 @@ experiment:
 model:
   lr_min: 0.0001
   lr_max_day: 0.001  # learning rate for day adapter weights
-  lr_max_gru: 0.0001  # learning rate for GRU weights (lower than adapters for fine-tuning)
+  lr_max_gru: 0.00001  # learning rate for GRU weights (lower than adapters for fine-tuning)
   
   # Day-specific adapter: projects neural features to common latent space
   # Output dim MUST be 512 to match baseline day layer output
@@ -68,7 +68,7 @@ dataset:
   batch_size: 64               # batch size for training (must match cuda_batch_size)
   n_classes: 41                # number of classes (phonemes) in the dataset
   max_seq_elements: 500        # maximum number of sequence elements (phonemes) for any trial
-  days_per_batch: 8            # number of randomly-selected days to include in each batch
+  days_per_batch: 16            # number of randomly-selected days to include in each batch
   seed: 1                      # random seed for reproducibility
   num_dataloader_workers: 4    # number of workers for the data loader
   loader_shuffle: false        # whether to shuffle the data loader

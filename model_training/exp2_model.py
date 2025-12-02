@@ -145,8 +145,8 @@ class Exp2Model(nn.Module):
         
         self.load_state_dict(current_state_dict)
         print(f"Loaded {len(loaded_keys)} pretrained weights from {ckpt_path}")
-        for k in loaded_keys:
-            print(f"  {k}")
+        #for k in loaded_keys:
+        #    print(f"  {k}")
     
     def _load_baseline_format(self, source_state_dict, current_state_dict):
         """
