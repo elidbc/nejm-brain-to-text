@@ -10,3 +10,6 @@
 
 # ignore model checkpoints
 model_training/trained_models/*
+
+# ignore wandb files
+**/wandb/*

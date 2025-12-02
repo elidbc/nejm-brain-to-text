@@ -136,12 +136,12 @@ class Exp2Model(nn.Module):
             print(f"Loading baseline (pretrained) checkpoint format")
             source_state_dict = ckpt['model_state_dict']
             loaded_keys = self._load_baseline_format(source_state_dict, current_state_dict)
-        elif ckpt_type == "exp":
+        elif ckpt_type == "exp2":
             print(f"Loading exp2 checkpoint format")
             source_state_dict = ckpt['model']
             loaded_keys = self._load_exp2_format(source_state_dict, current_state_dict)
         else:
-            raise ValueError(f"Unknown ckpt_type: {ckpt_type}. Must be 'pretrained' or 'exp'")
+            raise ValueError(f"Unknown ckpt_type: {ckpt_type}. Must be 'pretrained' or 'exp2'")
         
         self.load_state_dict(current_state_dict)
         print(f"Loaded {len(loaded_keys)} pretrained weights from {ckpt_path}")
@@ -198,8 +198,8 @@ class Exp2Model(nn.Module):
         loaded_keys = []
         for key, val in source_state_dict.items():
             # Only load GRU and classifier weights
-            if not (key.startswith('gru_decoder') or key.startswith('classifier')):
-                continue
+            #if not (key.startswith('gru_decoder') or key.startswith('classifier')):
+             #   continue
             
             if key in current_state_dict:
                 if current_state_dict[key].shape == val.shape:

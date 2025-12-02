@@ -2,7 +2,7 @@ experiment:
   name: "exp2_pretrained_gru_adapter"
   seed: 42
   output_dir: trained_models/exp2  # directory to save the trained model and logs
-  num_training_batches: 10000  # number of training batches to run
+  num_training_batches: 30000  # number of training batches to run
   gpu_number: "0"
   use_amp: True  # whether to use automatic mixed precision (AMP) for training
   
@@ -10,7 +10,7 @@ experiment:
   # Set pretrained_ckpt_path to load baseline RNN weights for GRU and classifier
   # Set freeze_gru to True to only train day_adapter weights
   pretrained_ckpt_path: "../data/t15_pretrained_rnn_baseline/checkpoint/best_checkpoint"
-  ckpt_type: "pretrained"  # "pretrained" for baseline RNN checkpoint, "exp" for exp2 checkpoint
+  ckpt_type: "exp2"  # "pretrained" for baseline RNN checkpoint, "exp" for exp2 checkpoint
   mlp_ckpt_path: "trained_models/exp2/checkpoint/best_checkpoint"
   
   freeze_gru: True

@@ -429,16 +429,14 @@ def main():
     print(f"Initialized datasets and data loaders")
 
     # 5. Initialize Model with optional pretrained weights
-    pretrained_ckpt = config['experiment'].get('pretrained_ckpt_path', None)
     ckpt_type = config['experiment'].get('ckpt_type', 'pretrained')
-    mlp_ckpt = config['experiment'].get('mlp_ckpt_path', None)
-
+    ckpt_path = config['experiment'].get('pretrained_ckpt_path', None) if ckpt_type == 'pretrained' else config['experiment'].get('mlp_ckpt_path', None)
     freeze_gru = config['experiment'].get('freeze_gru', False)
     
     model = Exp2Model(
         config=config, 
         num_days=config['dataset']['n_sessions'],
-        pretrained_ckpt_path=pretrained_ckpt,
+        pretrained_ckpt_path=cpt_path,
         ckpt_type=ckpt_type,
         freeze_gru=freeze_gru
     )
