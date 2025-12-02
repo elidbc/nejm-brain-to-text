@@ -1,0 +1,175 @@
+experiment:
+  name: "exp2_pretrained_gru_adapter"
+  seed: 42
+  output_dir: trained_models/exp2  # directory to save the trained model and logs
+  num_training_batches: 10000  # number of training batches to run
+  gpu_number: "0"
+  use_amp: True  # whether to use automatic mixed precision (AMP) for training
+  
+  # Pretrained model settings
+  # Set pretrained_ckpt_path to load baseline RNN weights for GRU and classifier
+  # Set freeze_gru to True to only train day_adapter weights
+  pretrained_ckpt_path: "../data/t15_pretrained_rnn_baseline/checkpoint/best_checkpoint"
+  freeze_gru: True
+  
+  # Gradient accumulation settings for training on smaller GPUs
+  # Effective batch size = target_batch_size, achieved by accumulating gradients
+  # over (target_batch_size / cuda_batch_size) mini-batches
+  target_batch_size: 64  # effective batch size after gradient accumulation
+  cuda_batch_size: 64  # batch size that fits in GPU memory (should match dataset.batch_size)
+
+
+model:
+  lr_min: 0.0001
+  lr_max_day: 0.005  # learning rate for day adapter weights
+  
+  # Day-specific adapter: projects neural features to common latent space
+  # Output dim MUST be 512 to match baseline day layer output
+  adapter:
+    neural_dim: 512   # input dimensionality of neural data
+    hidden_dim: 256   # hidden layer size in adapter MLP
+    dropout_rate: 0.2
+    output_dim: 512   # MUST match baseline (512) for GRU input compatibility
+
+  # GRU decoder: MUST match baseline pretrained model architecture
+  # Baseline: 768 hidden, 5 layers, unidirectional, dropout 0.4
+  gru_decoder:
+    hidden_dim: 768        # MUST match baseline
+    num_layers: 5          # MUST match baseline
+    dropout_rate: 0.4      # MUST match baseline
+    bidirectional: False   # MUST match baseline (unidirectional)
+
+  num_classes: 41          # number of phoneme classes
+  neural_dim: 512          # dimensionality of neural data
+  
+  # Patching: MUST match baseline (patch_size=14, patch_stride=4)
+  # GRU input dim = adapter.output_dim * patch_size = 512 * 14 = 7168
+  patch_size: 14           # MUST match baseline
+  patch_stride: 4          # MUST match baseline
+
+
+dataset:
+  data_transforms:
+    white_noise_std: 1.0       # standard deviation of white noise added to data
+    constant_offset_std: 0.2   # standard deviation of constant offset added to data
+    random_walk_std: 0.0       # standard deviation of random walk added to data
+    random_walk_axis: -1       # axis along which random walk is applied
+    static_gain_std: 0.0       # standard deviation of static gain applied to data
+    random_cut: 3              # number of time steps to randomly cut from beginning
+    smooth_kernel_size: 100    # size of smoothing kernel applied to data
+    smooth_data: true          # whether to smooth the data
+    smooth_kernel_std: 2       # standard deviation of smoothing kernel
+
+  neural_dim: 512              # dimensionality of neural data
+  batch_size: 64               # batch size for training (must match cuda_batch_size)
+  n_classes: 41                # number of classes (phonemes) in the dataset
+  max_seq_elements: 500        # maximum number of sequence elements (phonemes) for any trial
+  days_per_batch: 4            # number of randomly-selected days to include in each batch
+  seed: 1                      # random seed for reproducibility
+  num_dataloader_workers: 4    # number of workers for the data loader
+  loader_shuffle: false        # whether to shuffle the data loader
+  must_include_days: null      # specific days to include in the dataset
+  test_percentage: 0.1         # percentage of data to use for testing
+  feature_subset: null         # specific features to include in the dataset
+  n_sessions: 45               # number of sessions in the dataset
+
+  dataset_dir: ../data/hdf5_data_final  # directory containing the dataset
+  bad_trials_dict: null        # dictionary of bad trials to exclude from the dataset
+  
+  # 45 sessions from t15 participant
+  sessions:
+  - t15.2023.08.11
+  - t15.2023.08.13
+  - t15.2023.08.18
+  - t15.2023.08.20
+  - t15.2023.08.25
+  - t15.2023.08.27
+  - t15.2023.09.01
+  - t15.2023.09.03
+  - t15.2023.09.24
+  - t15.2023.09.29
+  - t15.2023.10.01
+  - t15.2023.10.06
+  - t15.2023.10.08
+  - t15.2023.10.13
+  - t15.2023.10.15
+  - t15.2023.10.20
+  - t15.2023.10.22
+  - t15.2023.11.03
+  - t15.2023.11.04
+  - t15.2023.11.17
+  - t15.2023.11.19
+  - t15.2023.11.26
+  - t15.2023.12.03
+  - t15.2023.12.08
+  - t15.2023.12.10
+  - t15.2023.12.17
+  - t15.2023.12.29
+  - t15.2024.02.25
+  - t15.2024.03.03
+  - t15.2024.03.08
+  - t15.2024.03.15
+  - t15.2024.03.17
+  - t15.2024.04.25
+  - t15.2024.04.28
+  - t15.2024.05.10
+  - t15.2024.06.14
+  - t15.2024.07.19
+  - t15.2024.07.21
+  - t15.2024.07.28
+  - t15.2025.01.10
+  - t15.2025.01.12
+  - t15.2025.03.14
+  - t15.2025.03.16
+  - t15.2025.03.30
+  - t15.2025.04.13
+  
+  # Probability of including trials in validation set (0 or 1)
+  # Some days excluded from validation
+  dataset_probability_val:
+  - 0  # t15.2023.08.11 - no val/test data from this day
+  - 1
+  - 1
+  - 1
+  - 1
+  - 1
+  - 1
+  - 1
+  - 1
+  - 1
+  - 1
+  - 1
+  - 1
+  - 1
+  - 1
+  - 1
+  - 1
+  - 1
+  - 1
+  - 1
+  - 1
+  - 1
+  - 1
+  - 1
+  - 1
+  - 1
+  - 1
+  - 1
+  - 0  # t15.2024.02.25 - no val/test data from this day
+  - 1
+  - 1
+  - 1
+  - 0  # t15.2024.04.25 - no val/test data from this day
+  - 0  # t15.2024.04.28 - no val/test data from this day
+  - 1
+  - 1
+  - 1
+  - 1
+  - 1
+  - 1
+  - 1
+  - 1
+  - 1
+  - 1
+  - 1
+

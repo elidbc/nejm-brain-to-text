@@ -1,0 +1,198 @@
+_wandb:
+    value:
+        cli_version: 0.23.0
+        e:
+            0ql15f4g8tsn6yevfi5toqoykeph8t53:
+                codePath: model_training/exp2_trainer.py
+                codePathLocal: exp2_trainer.py
+                cpu_count: 2
+                cpu_count_logical: 4
+                cudaVersion: "13.0"
+                disk:
+                    /:
+                        total: "154894188544"
+                        used: "77625483264"
+                email: eliwand@stanford.edu
+                executable: /home/ubuntu/miniconda3/envs/b2txt25/bin/python
+                git:
+                    commit: 0d1c80aa802610af742b06f6bba37be04bc53667
+                    remote: git@github.com:elidbc/nejm-brain-to-text.git
+                gpu: Tesla T4
+                gpu_count: 1
+                gpu_nvidia:
+                    - architecture: Turing
+                      cudaCores: 2560
+                      memoryTotal: "16106127360"
+                      name: Tesla T4
+                      uuid: GPU-6ff509c1-057c-7f39-b970-ea8dfb827149
+                host: ip-172-31-9-150
+                memory:
+                    total: "16555180032"
+                os: Linux-6.14.0-1016-aws-x86_64-with-glibc2.39
+                program: /home/ubuntu/nejm-brain-to-text/model_training/exp2_trainer.py
+                python: CPython 3.13.9
+                root: /home/ubuntu/nejm-brain-to-text/model_training
+                startedAt: "2025-12-02T02:45:14.231468Z"
+                writerId: 0ql15f4g8tsn6yevfi5toqoykeph8t53
+        m: []
+        python_version: 3.13.9
+        t:
+            "1":
+                - 1
+            "2":
+                - 1
+            "3":
+                - 13
+                - 16
+            "4": 3.13.9
+            "5": 0.23.0
+            "12": 0.23.0
+            "13": linux-x86_64
+dataset:
+    value:
+        bad_trials_dict: null
+        batch_size: 4
+        data_transforms:
+            constant_offset_std: 0.2
+            random_cut: 3
+            random_walk_axis: -1
+            random_walk_std: 0
+            smooth_data: true
+            smooth_kernel_size: 100
+            smooth_kernel_std: 2
+            static_gain_std: 0
+            white_noise_std: 1
+        dataset_dir: ../data/hdf5_data_final
+        dataset_probability_val:
+            - 0
+            - 1
+            - 1
+            - 1
+            - 1
+            - 1
+            - 1
+            - 1
+            - 1
+            - 1
+            - 1
+            - 1
+            - 1
+            - 1
+            - 1
+            - 1
+            - 1
+            - 1
+            - 1
+            - 1
+            - 1
+            - 1
+            - 1
+            - 1
+            - 1
+            - 1
+            - 1
+            - 1
+            - 0
+            - 1
+            - 1
+            - 1
+            - 0
+            - 0
+            - 1
+            - 1
+            - 1
+            - 1
+            - 1
+            - 1
+            - 1
+            - 1
+            - 1
+            - 1
+            - 1
+        days_per_batch: 4
+        feature_subset: null
+        loader_shuffle: false
+        max_seq_elements: 500
+        must_include_days: null
+        n_classes: 41
+        n_sessions: 45
+        neural_dim: 512
+        num_dataloader_workers: 4
+        seed: 1
+        sessions:
+            - t15.2023.08.11
+            - t15.2023.08.13
+            - t15.2023.08.18
+            - t15.2023.08.20
+            - t15.2023.08.25
+            - t15.2023.08.27
+            - t15.2023.09.01
+            - t15.2023.09.03
+            - t15.2023.09.24
+            - t15.2023.09.29
+            - t15.2023.10.01
+            - t15.2023.10.06
+            - t15.2023.10.08
+            - t15.2023.10.13
+            - t15.2023.10.15
+            - t15.2023.10.20
+            - t15.2023.10.22
+            - t15.2023.11.03
+            - t15.2023.11.04
+            - t15.2023.11.17
+            - t15.2023.11.19
+            - t15.2023.11.26
+            - t15.2023.12.03
+            - t15.2023.12.08
+            - t15.2023.12.10
+            - t15.2023.12.17
+            - t15.2023.12.29
+            - t15.2024.02.25
+            - t15.2024.03.03
+            - t15.2024.03.08
+            - t15.2024.03.15
+            - t15.2024.03.17
+            - t15.2024.04.25
+            - t15.2024.04.28
+            - t15.2024.05.10
+            - t15.2024.06.14
+            - t15.2024.07.19
+            - t15.2024.07.21
+            - t15.2024.07.28
+            - t15.2025.01.10
+            - t15.2025.01.12
+            - t15.2025.03.14
+            - t15.2025.03.16
+            - t15.2025.03.30
+            - t15.2025.04.13
+        test_percentage: 0.1
+experiment:
+    value:
+        cuda_batch_size: 64
+        freeze_gru: true
+        gpu_number: "0"
+        name: exp2_pretrained_gru_adapter
+        num_training_batches: 1000
+        output_dir: trained_models/exp2
+        pretrained_ckpt_path: ../data/t15_pretrained_rnn_baseline/checkpoint/best_checkpoint
+        seed: 42
+        target_batch_size: 64
+        use_amp: true
+model:
+    value:
+        adapter:
+            dropout_rate: 0.2
+            hidden_dim: 256
+            neural_dim: 512
+            output_dim: 512
+        gru_decoder:
+            bidirectional: false
+            dropout_rate: 0.4
+            hidden_dim: 768
+            num_layers: 5
+        lr_max_day: 0.005
+        lr_min: 0.0001
+        neural_dim: 512
+        num_classes: 41
+        patch_size: 14
+        patch_stride: 4

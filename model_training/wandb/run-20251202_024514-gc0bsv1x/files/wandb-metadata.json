@@ -1,0 +1,40 @@
+{
+  "os": "Linux-6.14.0-1016-aws-x86_64-with-glibc2.39",
+  "python": "CPython 3.13.9",
+  "startedAt": "2025-12-02T02:45:14.231468Z",
+  "program": "/home/ubuntu/nejm-brain-to-text/model_training/exp2_trainer.py",
+  "codePath": "model_training/exp2_trainer.py",
+  "codePathLocal": "exp2_trainer.py",
+  "git": {
+    "remote": "git@github.com:elidbc/nejm-brain-to-text.git",
+    "commit": "0d1c80aa802610af742b06f6bba37be04bc53667"
+  },
+  "email": "eliwand@stanford.edu",
+  "root": "/home/ubuntu/nejm-brain-to-text/model_training",
+  "host": "ip-172-31-9-150",
+  "executable": "/home/ubuntu/miniconda3/envs/b2txt25/bin/python",
+  "cpu_count": 2,
+  "cpu_count_logical": 4,
+  "gpu": "Tesla T4",
+  "gpu_count": 1,
+  "disk": {
+    "/": {
+      "total": "154894188544",
+      "used": "77625483264"
+    }
+  },
+  "memory": {
+    "total": "16555180032"
+  },
+  "gpu_nvidia": [
+    {
+      "name": "Tesla T4",
+      "memoryTotal": "16106127360",
+      "cudaCores": 2560,
+      "architecture": "Turing",
+      "uuid": "GPU-6ff509c1-057c-7f39-b970-ea8dfb827149"
+    }
+  ],
+  "cudaVersion": "13.0",
+  "writerId": "0ql15f4g8tsn6yevfi5toqoykeph8t53"
+}

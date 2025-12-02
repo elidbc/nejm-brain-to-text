@@ -1,0 +1,198 @@
+Gradient accumulation: 16 steps, 12500 optimizer updates
+Starting training...
+Using gradient accumulation with 16 steps
+Target batch size: 64 | CUDA batch size: 4
+Step: 255 | Loss: 71.3903 | Lr: 0.001000 | Time: 0.27s
+Step: 511 | Loss: 105.9218 | Lr: 0.001000 | Time: 0.09s
+Step: 767 | Loss: 105.0802 | Lr: 0.001000 | Time: 0.30s
+Step: 1023 | Loss: 112.6283 | Lr: 0.001000 | Time: 0.08s
+Step: 1279 | Loss: 83.0253 | Lr: 0.001000 | Time: 0.28s
+Step: 1535 | Loss: 91.2936 | Lr: 0.001000 | Time: 0.08s
+--------------------------------
+Running validation...
+Validation PER: 0.9504 | Validation Loss: 102.2902
+New best PER: 0.9504
+Step: 1791 | Loss: 64.4019 | Lr: 0.001000 | Time: 0.27s
+Step: 2047 | Loss: 112.9469 | Lr: 0.001000 | Time: 0.36s
+Step: 2303 | Loss: 61.1226 | Lr: 0.001000 | Time: 0.07s
+Step: 2559 | Loss: 84.7603 | Lr: 0.001000 | Time: 0.08s
+Step: 2815 | Loss: 95.9504 | Lr: 0.001000 | Time: 0.31s
+Step: 3071 | Loss: 93.4663 | Lr: 0.000999 | Time: 0.08s
+--------------------------------
+Running validation...
+Validation PER: 0.9513 | Validation Loss: 96.7827
+Step: 3327 | Loss: 84.8348 | Lr: 0.000999 | Time: 0.08s
+Step: 3583 | Loss: 89.5725 | Lr: 0.000999 | Time: 0.10s
+Step: 3839 | Loss: 81.4465 | Lr: 0.000999 | Time: 0.06s
+Step: 4095 | Loss: 69.0693 | Lr: 0.000999 | Time: 0.08s
+Step: 4351 | Loss: 110.7056 | Lr: 0.000999 | Time: 0.09s
+Step: 4607 | Loss: 97.3503 | Lr: 0.000999 | Time: 0.07s
+--------------------------------
+Running validation...
+Validation PER: 0.9470 | Validation Loss: 97.4660
+New best PER: 0.9470
+Step: 4863 | Loss: 113.2315 | Lr: 0.000999 | Time: 0.34s
+Step: 5119 | Loss: 78.7334 | Lr: 0.000999 | Time: 0.08s
+Step: 5375 | Loss: 73.2655 | Lr: 0.000998 | Time: 0.08s
+Step: 5631 | Loss: 78.5160 | Lr: 0.000998 | Time: 0.07s
+Step: 5887 | Loss: 67.2543 | Lr: 0.000998 | Time: 0.28s
+Step: 6143 | Loss: 103.0477 | Lr: 0.000998 | Time: 0.08s
+Step: 6399 | Loss: 105.9534 | Lr: 0.000998 | Time: 0.09s
+--------------------------------
+Running validation...
+Validation PER: 0.9513 | Validation Loss: 96.5164
+Step: 6655 | Loss: 86.3823 | Lr: 0.000998 | Time: 0.09s
+Step: 6911 | Loss: 100.2876 | Lr: 0.000997 | Time: 0.09s
+Step: 7167 | Loss: 69.9592 | Lr: 0.000997 | Time: 0.06s
+Step: 7423 | Loss: 90.1839 | Lr: 0.000997 | Time: 0.07s
+Step: 7679 | Loss: 84.9776 | Lr: 0.000997 | Time: 0.08s
+Step: 7935 | Loss: 74.3481 | Lr: 0.000997 | Time: 0.09s
+--------------------------------
+Running validation...
+Validation PER: 0.9511 | Validation Loss: 98.4085
+Step: 8191 | Loss: 86.9967 | Lr: 0.000996 | Time: 0.09s
+Step: 8447 | Loss: 96.7615 | Lr: 0.000996 | Time: 0.09s
+Step: 8703 | Loss: 123.1956 | Lr: 0.000996 | Time: 0.11s
+Step: 8959 | Loss: 83.6724 | Lr: 0.000996 | Time: 0.08s
+Step: 9215 | Loss: 137.0292 | Lr: 0.000995 | Time: 0.13s
+Step: 9471 | Loss: 79.8629 | Lr: 0.000995 | Time: 0.07s
+--------------------------------
+Running validation...
+Validation PER: 0.9511 | Validation Loss: 96.6284
+Step: 9727 | Loss: 60.8974 | Lr: 0.000995 | Time: 0.08s
+Step: 9983 | Loss: 75.5611 | Lr: 0.000994 | Time: 0.08s
+Step: 10239 | Loss: 75.6255 | Lr: 0.000994 | Time: 0.07s
+Step: 10495 | Loss: 98.2911 | Lr: 0.000994 | Time: 0.07s
+Step: 10751 | Loss: 65.9356 | Lr: 0.000994 | Time: 0.08s
+Step: 11007 | Loss: 92.9645 | Lr: 0.000993 | Time: 0.08s
+--------------------------------
+Running validation...
+Validation PER: 0.9511 | Validation Loss: 96.7130
+Step: 11263 | Loss: 83.4935 | Lr: 0.000993 | Time: 0.11s
+Step: 11519 | Loss: 109.3191 | Lr: 0.000993 | Time: 0.08s
+Step: 11775 | Loss: 110.7678 | Lr: 0.000992 | Time: 0.09s
+Step: 12031 | Loss: 80.9250 | Lr: 0.000992 | Time: 0.08s
+Step: 12287 | Loss: 71.9101 | Lr: 0.000992 | Time: 0.08s
+Step: 12543 | Loss: 70.6520 | Lr: 0.000991 | Time: 0.06s
+Step: 12799 | Loss: 92.3275 | Lr: 0.000991 | Time: 0.07s
+--------------------------------
+Running validation...
+Validation PER: 0.9491 | Validation Loss: 95.2940
+Step: 13055 | Loss: 89.1431 | Lr: 0.000991 | Time: 0.08s
+Step: 13311 | Loss: 124.1733 | Lr: 0.000990 | Time: 0.09s
+Step: 13567 | Loss: 90.8876 | Lr: 0.000990 | Time: 0.08s
+Step: 13823 | Loss: 97.2754 | Lr: 0.000989 | Time: 0.09s
+Step: 14079 | Loss: 101.0091 | Lr: 0.000989 | Time: 0.09s
+Step: 14335 | Loss: 66.4685 | Lr: 0.000989 | Time: 0.06s
+--------------------------------
+Running validation...
+Validation PER: 0.9108 | Validation Loss: 95.3919
+New best PER: 0.9108
+Step: 14591 | Loss: 123.6326 | Lr: 0.000988 | Time: 0.09s
+Step: 14847 | Loss: 84.7310 | Lr: 0.000988 | Time: 0.10s
+Step: 15103 | Loss: 102.4878 | Lr: 0.000987 | Time: 0.08s
+Step: 15359 | Loss: 83.6466 | Lr: 0.000987 | Time: 0.08s
+Step: 15615 | Loss: 77.0646 | Lr: 0.000987 | Time: 0.10s
+Step: 15871 | Loss: 56.3057 | Lr: 0.000986 | Time: 0.07s
+--------------------------------
+Running validation...
+Validation PER: 0.9510 | Validation Loss: 97.6336
+Step: 16127 | Loss: 78.2561 | Lr: 0.000986 | Time: 0.09s
+Step: 16383 | Loss: 80.9138 | Lr: 0.000985 | Time: 0.08s
+Step: 16639 | Loss: 109.9403 | Lr: 0.000985 | Time: 0.10s
+Step: 16895 | Loss: 67.9902 | Lr: 0.000984 | Time: 0.08s
+Step: 17151 | Loss: 72.8666 | Lr: 0.000984 | Time: 0.08s
+Step: 17407 | Loss: 71.4917 | Lr: 0.000983 | Time: 0.06s
+--------------------------------
+Running validation...
+Validation PER: 0.9129 | Validation Loss: 96.5819
+Step: 17663 | Loss: 85.2037 | Lr: 0.000983 | Time: 0.08s
+Step: 17919 | Loss: 75.9448 | Lr: 0.000982 | Time: 0.09s
+Step: 18175 | Loss: 106.2264 | Lr: 0.000982 | Time: 0.08s
+Step: 18431 | Loss: 64.7012 | Lr: 0.000981 | Time: 0.06s
+Step: 18687 | Loss: 67.7083 | Lr: 0.000981 | Time: 0.08s
+Step: 18943 | Loss: 101.3467 | Lr: 0.000980 | Time: 0.09s
+Step: 19199 | Loss: 88.1558 | Lr: 0.000980 | Time: 0.09s
+--------------------------------
+Running validation...
+Validation PER: 0.8771 | Validation Loss: 95.8490
+New best PER: 0.8771
+Step: 19455 | Loss: 67.4359 | Lr: 0.000979 | Time: 0.06s
+Step: 19711 | Loss: 116.7087 | Lr: 0.000979 | Time: 0.10s
+Step: 19967 | Loss: 79.5008 | Lr: 0.000978 | Time: 0.08s
+Step: 20223 | Loss: 64.9316 | Lr: 0.000977 | Time: 0.08s
+Step: 20479 | Loss: 107.7342 | Lr: 0.000977 | Time: 0.08s
+Step: 20735 | Loss: 96.5583 | Lr: 0.000976 | Time: 0.10s
+--------------------------------
+Running validation...
+Validation PER: 0.8856 | Validation Loss: 97.0784
+Step: 20991 | Loss: 108.5714 | Lr: 0.000976 | Time: 0.08s
+Step: 21247 | Loss: 95.0844 | Lr: 0.000975 | Time: 0.08s
+Step: 21503 | Loss: 81.3010 | Lr: 0.000975 | Time: 0.08s
+Step: 21759 | Loss: 85.2606 | Lr: 0.000974 | Time: 0.07s
+Step: 22015 | Loss: 89.4632 | Lr: 0.000973 | Time: 0.07s
+Step: 22271 | Loss: 66.3768 | Lr: 0.000973 | Time: 0.08s
+--------------------------------
+Running validation...
+Validation PER: 0.8700 | Validation Loss: 94.8638
+New best PER: 0.8700
+Step: 22527 | Loss: 89.9796 | Lr: 0.000972 | Time: 0.09s
+Step: 22783 | Loss: 71.8784 | Lr: 0.000971 | Time: 0.08s
+Step: 23039 | Loss: 114.0204 | Lr: 0.000971 | Time: 0.10s
+Step: 23295 | Loss: 65.3396 | Lr: 0.000970 | Time: 0.07s
+Step: 23551 | Loss: 98.2499 | Lr: 0.000970 | Time: 0.08s
+Step: 23807 | Loss: 70.9670 | Lr: 0.000969 | Time: 0.09s
+--------------------------------
+Running validation...
+Validation PER: 0.8655 | Validation Loss: 101.3095
+New best PER: 0.8655
+Step: 24063 | Loss: 88.7016 | Lr: 0.000968 | Time: 0.09s
+Step: 24319 | Loss: 94.5431 | Lr: 0.000968 | Time: 0.09s
+Step: 24575 | Loss: 86.1380 | Lr: 0.000967 | Time: 0.07s
+Step: 24831 | Loss: 80.4600 | Lr: 0.000966 | Time: 0.08s
+Step: 25087 | Loss: 100.0865 | Lr: 0.000966 | Time: 0.08s
+Step: 25343 | Loss: 79.1595 | Lr: 0.000965 | Time: 0.09s
+Step: 25599 | Loss: 108.3977 | Lr: 0.000964 | Time: 0.08s
+--------------------------------
+Running validation...
+Validation PER: 0.8792 | Validation Loss: 98.8008
+Step: 25855 | Loss: 62.6020 | Lr: 0.000963 | Time: 0.08s
+Step: 26111 | Loss: 96.9156 | Lr: 0.000963 | Time: 0.10s
+Step: 26367 | Loss: 92.4831 | Lr: 0.000962 | Time: 0.07s
+Step: 26623 | Loss: 83.8929 | Lr: 0.000961 | Time: 0.06s
+Traceback (most recent call last):
+  File "/home/ubuntu/nejm-brain-to-text/model_training/exp1_train.py", line 386, in <module>
+    main()
+    ~~~~^^
+  File "/home/ubuntu/nejm-brain-to-text/model_training/exp1_train.py", line 383, in main
+    trainer.train(train_loader, val_loader)
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/nejm-brain-to-text/model_training/exp1_train.py", line 167, in train
+    logits = self.model(x, day_indicies)
+  File "/home/ubuntu/miniconda3/envs/b2txt25/lib/python3.13/site-packages/torch/nn/modules/module.py", line 1775, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/miniconda3/envs/b2txt25/lib/python3.13/site-packages/torch/nn/modules/module.py", line 1786, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/home/ubuntu/nejm-brain-to-text/model_training/exp1_model.py", line 134, in forward
+    x = self.gru_decoder(x)
+  File "/home/ubuntu/miniconda3/envs/b2txt25/lib/python3.13/site-packages/torch/nn/modules/module.py", line 1775, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/miniconda3/envs/b2txt25/lib/python3.13/site-packages/torch/nn/modules/module.py", line 1786, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/home/ubuntu/nejm-brain-to-text/model_training/exp1_model.py", line 57, in forward
+    out, _ = self.gru(x)
+             ~~~~~~~~^^^
+  File "/home/ubuntu/miniconda3/envs/b2txt25/lib/python3.13/site-packages/torch/nn/modules/module.py", line 1775, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/home/ubuntu/miniconda3/envs/b2txt25/lib/python3.13/site-packages/torch/nn/modules/module.py", line 1786, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/home/ubuntu/miniconda3/envs/b2txt25/lib/python3.13/site-packages/torch/nn/modules/rnn.py", line 1394, in forward
+    result = _VF.gru(
+        input,
+    ...<7 lines>...
+        self.batch_first,
+    )
+KeyboardInterrupt
