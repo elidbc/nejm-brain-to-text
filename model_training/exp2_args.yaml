@@ -12,7 +12,7 @@ experiment:
   resuming: True
   pretrained_ckpt_path: "../data/t15_pretrained_rnn_baseline/checkpoint/best_checkpoint"
   ckpt_type: "exp2"  # "pretrained" for baseline RNN checkpoint, "exp" for exp2 checkpoint
-  mlp_ckpt_path: "trained_models/exp2/checkpoint_latest.pt"
+  mlp_ckpt_path: "trained_models/exp2/checkpoint_best_phase3_pt11.pt"
   
   freeze_gru: False
   
@@ -25,7 +25,7 @@ experiment:
 
 model:
   lr_min: 0.0000
-  lr_max_day: 0.001  # learning rate for day adapter weights
+  lr_max_day: 0.0005  # learning rate for day adapter weights
   lr_max_gru: 0.00001  # learning rate for GRU weights (lower than adapters for fine-tuning)
   
   # Day-specific adapter: projects neural features to common latent space

@@ -2,17 +2,35 @@ import torch
 import torch.nn as nn
 import time
 import os
+import sys
 import numpy as np
 import pickle
 import yaml
 import wandb
 import math
+from datetime import datetime
 from torch.utils.data import DataLoader
 from dataset import BrainToTextDataset, train_test_split_indicies
 from exp2_model import Exp2Model
 from data_augmentations import gauss_smooth
 from evaluate_model_helpers import LOGIT_TO_PHONEME
 import torchaudio.functional as F
+
+
+class Tee:
+    """Redirect stdout to both console and a log file."""
+    def __init__(self, log_path):
+        self.terminal = sys.stdout
+        self.log_file = open(log_path, 'a')
+        
+    def write(self, message):
+        self.terminal.write(message)
+        self.log_file.write(message)
+        self.log_file.flush()  # Ensure immediate write
+        
+    def flush(self):
+        self.terminal.flush()
+        self.log_file.flush()
 
 class Exp2Trainer:
     def __init__(self, model, config, device):
@@ -303,7 +321,15 @@ class Exp2Trainer:
         total_length = 0
         total_val_loss = 0
         num_batches = 0
-        #printed_sample = False  # Flag to print one sample per validation
+        
+        # Randomly select a batch index to print from
+        try:
+            num_val_batches = len(val_loader)
+        except:
+            num_val_batches = 50 # Fallback estimate
+            
+        print_batch_idx = np.random.randint(0, num_val_batches)
+        printed_sample = False
 
         with torch.no_grad():
             for batch_idx, batch in enumerate(val_loader):
@@ -330,7 +356,12 @@ class Exp2Trainer:
                 num_batches += 1
 
                 preds = torch.argmax(logits, dim=2) # shape: (batch_size, max_seq_length)
-                print_idx = np.random.randint(0, preds.shape[0])
+                
+                # Determine if we print from this batch
+                target_sample_idx_in_batch = -1
+                if batch_idx == print_batch_idx and not printed_sample:
+                    target_sample_idx_in_batch = np.random.randint(0, preds.shape[0])
+
                 for i in range(preds.shape[0]):
                     raw_pred = preds[i, :input_lengths[i]]
                     
@@ -350,22 +381,20 @@ class Exp2Trainer:
                     total_length += length
                     
                     # Print one sample prediction per validation to monitor CTC behavior
-                    if i == print_idx:
+                    if i == target_sample_idx_in_batch:
                         # Convert IDs to phoneme names
                         raw_pred_phonemes = [LOGIT_TO_PHONEME[p.item()] for p in raw_pred[:50]]  # First 50 raw preds
                         pred_phonemes = [LOGIT_TO_PHONEME[p.item()] for p in pred_seq]
                         label_phonemes = [LOGIT_TO_PHONEME[p.item()] for p in y]
                         
-                        # Count blanks in raw prediction
-                        #blank_count = (raw_pred == 0).sum().item()
-                        #blank_pct = 100 * blank_count / len(raw_pred)
+                        day_idx = day_indicies[i].item()
+                        session_name = self.config['dataset']['sessions'][day_idx]
                         
-                        #print(f"Sample prediction (first 50 raw): {' '.join(raw_pred_phonemes)}")
-                        #print(f"  Blanks: {blank_count}/{len(raw_pred)} ({blank_pct:.1f}%)")
-                        print(f"  Random sample from day: {day_indicies[i].item()}")
+                        print(f"  Random sample from session: {session_name} (Day {day_idx})")
+                        #print(f"  Sample prediction (first 50 raw): {' '.join(raw_pred_phonemes)}")
                         print(f"  Decoded prediction: {' '.join(pred_phonemes)}")
                         print(f"  Ground truth:       {' '.join(label_phonemes)}")
-                        #printed_sample = True
+                        printed_sample = True
 
         avg_per = total_edit_distance / total_length
         avg_val_loss = total_val_loss / num_batches
@@ -399,6 +428,17 @@ def load_config(yaml_path):
 def main():
     # 1. Load Configuration
     config = load_config('exp2_args.yaml')
+    
+    # Set up logging to file
+    output_dir = config['experiment']['output_dir']
+    os.makedirs(output_dir, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    log_path = os.path.join(output_dir, f'training_log_{timestamp}.txt')
+    sys.stdout = Tee(log_path)
+    print(f"Logging to: {log_path}")
+    print(f"Run started at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print("-" * 50)
+    
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
@@ -450,7 +490,7 @@ def main():
     )
 
     # 5. Initialize Model with optional pretrained weights
-    resume_checkpoint = os.path.join(config['experiment']['output_dir'], 'checkpoint_best.pt')
+    resume_checkpoint = os.path.join(config['experiment']['mlp_ckpt_path'])
     start_idx = 0
 
     if os.path.exists(resume_checkpoint):
