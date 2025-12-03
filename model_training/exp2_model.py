@@ -17,8 +17,8 @@ class DayAdapter(nn.Module):
                 #nn.ReLU(),
                 nn.Softsign(),
                 nn.Dropout(dropout_rate),
-                nn.Linear(hidden_dim, output_dim),
-                nn.LayerNorm(output_dim)
+                nn.Linear(hidden_dim, output_dim)
+                #nn.LayerNorm(output_dim)
             ) for _ in range(num_days)
         ])
 
