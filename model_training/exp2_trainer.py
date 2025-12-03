@@ -196,7 +196,7 @@ class Exp2Trainer:
             checkpoint = torch.load(resume_from)
             self.model.load_state_dict(checkpoint['model'])
             self.optimizer.load_state_dict(checkpoint['optimizer'])
-            self.scheduler.load_state_dict(checkpoint['scheduler'])
+            #self.scheduler.load_state_dict(checkpoint['scheduler'])
             self.best_val_per = checkpoint.get('best_val_per', float('inf'))
             start_batch_idx = checkpoint['batch_idx'] + 1
             step_counter = start_batch_idx // self.accumulation_steps
@@ -456,9 +456,9 @@ def main():
     if os.path.exists(resume_checkpoint):
         print(f"Resuming training from checkpoint {resume_checkpoint}")
         checkpoint = torch.load(resume_checkpoint, map_location='cpu')
-        start_idx = checkpoint['batch_idx'] + 1
-        indices = range(start_idx, len(train_ds))
-        train_ds = torch.utils.data.Subset(train_ds, indices)
+        #start_idx = checkpoint['batch_idx'] + 1
+        #indices = range(start_idx, len(train_ds))
+        #train_ds = torch.utils.data.Subset(train_ds, indices)
 
     # 4. Initialize DataLoaders
     train_loader = DataLoader(
