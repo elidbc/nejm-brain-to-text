@@ -2,24 +2,46 @@ import torch
 import torch.nn as nn
 import time
 import os
+import sys
 import numpy as np
 import pickle
 import yaml
 import wandb
+import math
+from datetime import datetime
 from torch.utils.data import DataLoader
-from dataset import BrainToTextDataset, train_test_split_indicies
-from exp1_model import Exp1Model
-from data_augmentations import gauss_smooth
+from cs230_braintotext.model_training.baseline.dataset import BrainToTextDataset, train_test_split_indicies
+from cs230_braintotext.model_training.mlp_gru_model import Exp2Model
+from cs230_braintotext.model_training.baseline.data_augmentations import gauss_smooth
+from cs230_braintotext.model_training.baseline.evaluate_model_helpers import LOGIT_TO_PHONEME
 import torchaudio.functional as F
 
-class Exp1Trainer:
+
+class Tee:
+    """Redirect stdout to both console and a log file."""
+    def __init__(self, log_path):
+        self.terminal = sys.stdout
+        self.log_file = open(log_path, 'a')
+        
+    def write(self, message):
+        self.terminal.write(message)
+        self.log_file.write(message)
+        self.log_file.flush()  # Ensure immediate write
+        
+    def flush(self):
+        self.terminal.flush()
+        self.log_file.flush()
+
+class Exp2Trainer:
     def __init__(self, model, config, device):
         self.model = model.to(device)
         self.config = config
         self.device = device
         self.output_dir = self.config['experiment']['output_dir']
+        self.freeze_gru = self.config['experiment'].get('freeze_gru', False)
+        
         self.wandb_run = wandb.init(
-            project="brain-to-text-exp1",
+            project="brain-to-text-exp2",
             config=config,
             name=self.config['experiment']['name']
         )
@@ -37,26 +59,79 @@ class Exp1Trainer:
         self.num_optimizer_steps = self.config['experiment']['num_training_batches'] // self.accumulation_steps
         print(f"Gradient accumulation: {self.accumulation_steps} steps, {self.num_optimizer_steps} optimizer updates")
 
-        # Params and Optimizer
-        bias_params = [p for name, p in self.model.named_parameters() if 'bias' in name]
-        adapter_params = [p for name, p in self.model.named_parameters() if 'day_adapter' in name and 'bias' not in name]
-        gru_params = [p for name, p in self.model.named_parameters() if 'gru_decoder' in name and 'bias' not in name]
-        classifier_params = [p for name, p in self.model.named_parameters() if 'classifier' in name and 'bias' not in name]
-
-        self.optimizer = torch.optim.AdamW([
-            {'params': bias_params, 'weight_decay': 0.0},
-            {'params': adapter_params, 'weight_decay': 0.01, 'lr': self.config['model']['lr_max_day']},
-            {'params': gru_params, 'weight_decay': 0.01},
-            {'params': classifier_params, 'weight_decay': 0.01},
-        ])
+        # Params and Optimizer - only include trainable parameters
+        # When freeze_gru=True, GRU and classifier params have requires_grad=False
+        trainable_params = [(name, p) for name, p in self.model.named_parameters() if p.requires_grad]
+        
+        # Build parameter groups based on freeze_gru setting
+        lr_adapter = self.config['model']['lr_max_day']
+        lr_gru = self.config['model'].get('lr_max_gru', lr_adapter * 0.1)
+        
+        # Separate params by component and bias/weight for proper weight decay
+        adapter_bias_params = [p for name, p in trainable_params if 'day_adapter' in name and 'bias' in name]
+        adapter_weight_params = [p for name, p in trainable_params if 'day_adapter' in name and 'bias' not in name]
+        gru_bias_params = [p for name, p in trainable_params if 'gru_decoder' in name and 'bias' in name]
+        gru_weight_params = [p for name, p in trainable_params if 'gru_decoder' in name and 'bias' not in name]
+        classifier_bias_params = [p for name, p in trainable_params if 'classifier' in name and 'bias' in name]
+        classifier_weight_params = [p for name, p in trainable_params if 'classifier' in name and 'bias' not in name]
+        
+        # Build param groups list
+        param_groups = [
+            {'params': adapter_bias_params, 'weight_decay': 0.0, 'lr': lr_adapter},
+            {'params': adapter_weight_params, 'weight_decay': 0.01, 'lr': lr_adapter},
+        ]
+        
+        if self.freeze_gru:
+            print("GRU frozen: training only day_adapter parameters")
+            print(f"  Adapter LR: {lr_adapter}")
+        else:
+            print("Training all parameters (GRU not frozen)")
+            print(f"  Adapter LR: {lr_adapter}, GRU/Classifier LR: {lr_gru}")
+            param_groups.extend([
+                {'params': gru_bias_params, 'weight_decay': 0.0, 'lr': lr_gru},
+                {'params': gru_weight_params, 'weight_decay': 0.01, 'lr': lr_gru},
+                {'params': classifier_bias_params, 'weight_decay': 0.0, 'lr': lr_gru},
+                {'params': classifier_weight_params, 'weight_decay': 0.01, 'lr': lr_gru},
+            ])
+        
+        # Filter out empty param groups
+        param_groups = [pg for pg in param_groups if len(pg['params']) > 0]
+        
+        # Create optimizer
+        self.optimizer = torch.optim.AdamW(param_groups)
+        
+        # Log parameter counts
+        print(f"  Adapter params: {sum(p.numel() for p in adapter_bias_params + adapter_weight_params):,}")
+        if not self.freeze_gru:
+            print(f"  GRU params: {sum(p.numel() for p in gru_bias_params + gru_weight_params):,}")
+            print(f"  Classifier params: {sum(p.numel() for p in classifier_bias_params + classifier_weight_params):,}")
         
         # Learning Rate Scheduler
         # T_max is set to num_optimizer_steps (not num_training_batches) because
         # scheduler.step() is called once per gradient accumulation cycle, not once per batch
-        self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-            self.optimizer,
-            T_max = self.num_optimizer_steps,
-            eta_min = self.config['model']['lr_min'],
+        # self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+        #     self.optimizer,
+        #     T_max = self.num_optimizer_steps,
+        #     eta_min = self.config['model']['lr_min'],
+        # )
+
+        adapter_lambda = lambda step: 0.5 * (1 + math.cos(math.pi * step / self.num_optimizer_steps))
+        gru_lambda = lambda step: 1.0
+
+        if self.freeze_gru:
+            print("GRU frozen: training only day_adapter parameters")
+            lambdas = [adapter_lambda, adapter_lambda]
+        else:
+            print("Training all parameters (GRU not frozen)")
+            lambdas = [
+                adapter_lambda, adapter_lambda, # Adapter
+                gru_lambda, gru_lambda,         # GRU
+                gru_lambda, gru_lambda          # Classifier
+            ]
+
+        self.scheduler = torch.optim.lr_scheduler.LambdaLR(
+            self.optimizer, 
+            lr_lambda=lambdas
         )
 
         # Loss
@@ -128,11 +203,24 @@ class Exp1Trainer:
             
         return features, n_time_steps
 
-    def train(self, train_loader, val_loader):
-        """
-        Train the model
-        """
+    def train(self, train_loader, val_loader, resume_from=None):
         print("Starting training...")
+
+        start_batch_idx = 0
+        step_counter = 0
+
+        if resume_from:
+            print(f"Resuming training from checkpoint {resume_from}")
+            checkpoint = torch.load(resume_from)
+            self.model.load_state_dict(checkpoint['model'])
+            self.optimizer.load_state_dict(checkpoint['optimizer'])
+            #self.scheduler.load_state_dict(checkpoint['scheduler'])
+            self.best_val_per = checkpoint.get('best_val_per', float('inf'))
+            start_batch_idx = checkpoint['batch_idx'] + 1
+            step_counter = start_batch_idx // self.accumulation_steps
+            print(f"Restored training state. Resuming from batch {start_batch_idx} (step {step_counter})")
+
+
         self.model.train()
 
         # Use accumulation_steps computed at init time (ensures scheduler T_max is consistent)
@@ -144,18 +232,18 @@ class Exp1Trainer:
         
         # Initialize loss accumulator
         total_loss = 0
-        num_batches = 0
-        step_counter = 0
+        #num_batches = 0
 
-        for batch_idx, batch in enumerate(train_loader):
+        for i, batch in enumerate(train_loader):
+            batch_idx = start_batch_idx + i
             start_time = time.time()
 
             # 1. Move data to device
-            x = batch['input_features'].to(self.device)
-            labels = batch['seq_class_ids'].to(self.device)
-            n_time_steps = batch['n_time_steps'].to(self.device)
-            phone_seq_lens = batch['phone_seq_lens'].to(self.device)
-            day_indicies = batch['day_indicies'].to(self.device)
+            x = batch['input_features'].to(self.device, non_blocking=True)
+            labels = batch['seq_class_ids'].to(self.device, non_blocking=True)
+            n_time_steps = batch['n_time_steps'].to(self.device, non_blocking=True)
+            phone_seq_lens = batch['phone_seq_lens'].to(self.device, non_blocking=True)
+            day_indicies = batch['day_indicies'].to(self.device, non_blocking=True)
 
             with torch.autocast(device_type = "cuda", enabled = self.config['experiment']['use_amp'], dtype = torch.float16):
                 # 2. Apply data augmentations, patching, and day-specific adapter
@@ -177,7 +265,6 @@ class Exp1Trainer:
 
                 loss = torch.mean(loss) / accumulation_steps # take mean loss over batches
 
-
             # 5. Backward pass -> update weights
             loss.backward()
             if (batch_idx + 1) % accumulation_steps == 0:
@@ -186,19 +273,25 @@ class Exp1Trainer:
                 self.scheduler.step()
                 self.optimizer.zero_grad()
                 step_counter += 1
-                if step_counter % 16 == 0:
-                    lr = self.scheduler.get_last_lr()[0]
-                    raw_loss = loss.item() * accumulation_steps
-                    self.history['train_loss'].append(raw_loss)
-                    wandb.log({
-                        "train_loss": raw_loss,
-                        "learning_rate": lr,
-                        "epoch": batch_idx / accumulation_steps 
-                    })
-                    print(f"Step: {batch_idx} | Loss: {raw_loss:.4f} | Lr: {lr:.6f} | Time: {time.time() - start_time:.2f}s")
 
-            #if batch_idx % 1000 == 0:
-            if (batch_idx + 1) % accumulation_steps == 0 and step_counter % 100 == 0:
+            # Log training progress every 100 batches
+            if (batch_idx + 1) % 200 == 0:
+                lrs = self.scheduler.get_last_lr()
+                lr_adapter = lrs[0]
+                lr_gru = lrs[2] if not self.freeze_gru else 0.0
+                raw_loss = loss.item() * accumulation_steps
+                self.history['train_loss'].append(raw_loss)
+                wandb.log({
+                    "train_loss": raw_loss,
+                    "lr_adapter": lr_adapter,
+                    "lr_gru": lr_gru,
+                    "batch": batch_idx + 1,
+                    "step": step_counter,
+                })
+                print(f"Batch {batch_idx + 1:>5} | Loss: {raw_loss:.4f} | Step {step_counter:>4} | AdpLR: {lr_adapter:.6f} | GruLR: {lr_gru:.6f}")
+
+            # Run validation every 500 batches
+            if (batch_idx + 1) % 500 == 0:
                 val_per, val_loss = self.validate(val_loader)
 
                 self.history['val_loss'].append(val_loss)
@@ -228,6 +321,15 @@ class Exp1Trainer:
         total_length = 0
         total_val_loss = 0
         num_batches = 0
+        
+        # Randomly select a batch index to print from
+        try:
+            num_val_batches = len(val_loader)
+        except:
+            num_val_batches = 50 # Fallback estimate
+            
+        print_batch_idx = np.random.randint(0, num_val_batches)
+        printed_sample = False
 
         with torch.no_grad():
             for batch_idx, batch in enumerate(val_loader):
@@ -254,6 +356,11 @@ class Exp1Trainer:
                 num_batches += 1
 
                 preds = torch.argmax(logits, dim=2) # shape: (batch_size, max_seq_length)
+                
+                # Determine if we print from this batch
+                target_sample_idx_in_batch = -1
+                if batch_idx == print_batch_idx and not printed_sample:
+                    target_sample_idx_in_batch = np.random.randint(0, preds.shape[0])
 
                 for i in range(preds.shape[0]):
                     raw_pred = preds[i, :input_lengths[i]]
@@ -272,6 +379,22 @@ class Exp1Trainer:
 
                     total_edit_distance += dist
                     total_length += length
+                    
+                    # Print one sample prediction per validation to monitor CTC behavior
+                    if i == target_sample_idx_in_batch:
+                        # Convert IDs to phoneme names
+                        raw_pred_phonemes = [LOGIT_TO_PHONEME[p.item()] for p in raw_pred[:50]]  # First 50 raw preds
+                        pred_phonemes = [LOGIT_TO_PHONEME[p.item()] for p in pred_seq]
+                        label_phonemes = [LOGIT_TO_PHONEME[p.item()] for p in y]
+                        
+                        day_idx = day_indicies[i].item()
+                        session_name = self.config['dataset']['sessions'][day_idx]
+                        
+                        print(f"  Random sample from session: {session_name} (Day {day_idx})")
+                        #print(f"  Sample prediction (first 50 raw): {' '.join(raw_pred_phonemes)}")
+                        print(f"  Decoded prediction: {' '.join(pred_phonemes)}")
+                        print(f"  Ground truth:       {' '.join(label_phonemes)}")
+                        printed_sample = True
 
         avg_per = total_edit_distance / total_length
         avg_val_loss = total_val_loss / num_batches
@@ -304,7 +427,18 @@ def load_config(yaml_path):
 
 def main():
     # 1. Load Configuration
-    config = load_config('exp1_args.yaml')
+    config = load_config('exp2_args.yaml')
+    
+    # Set up logging to file
+    output_dir = config['experiment']['output_dir']
+    os.makedirs(output_dir, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    log_path = os.path.join(output_dir, f'training_log_{timestamp}.txt')
+    sys.stdout = Tee(log_path)
+    print(f"Logging to: {log_path}")
+    print(f"Run started at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print("-" * 50)
+    
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
@@ -355,6 +489,17 @@ def main():
         feature_subset=None,
     )
 
+    # 5. Initialize Model with optional pretrained weights
+    resume_checkpoint = os.path.join(config['experiment']['mlp_ckpt_path'])
+    start_idx = 0
+
+    if os.path.exists(resume_checkpoint):
+        print(f"Resuming training from checkpoint {resume_checkpoint}")
+        checkpoint = torch.load(resume_checkpoint, map_location='cpu')
+        #start_idx = checkpoint['batch_idx'] + 1
+        #indices = range(start_idx, len(train_ds))
+        #train_ds = torch.utils.data.Subset(train_ds, indices)
+
     # 4. Initialize DataLoaders
     train_loader = DataLoader(
         train_ds,
@@ -373,14 +518,34 @@ def main():
     )
     print(f"Initialized datasets and data loaders")
 
-    # 5. Initialize Model, Trainer, and Start Training
-    model = Exp1Model(config, num_days=config['dataset']['n_sessions'])
-    print(f"Initialized model — number of parameters: {sum(p.numel() for p in model.parameters())}")
-    print(f"Adapter parameters: {sum(p.numel() for p in model.day_adapter.adapters.parameters())}")
-    print(f"Gru parameters: {sum(p.numel() for p in model.gru_decoder.parameters())}")
-    print(f"Classifier parameters: {sum(p.numel() for p in model.classifier.parameters())}")
-    trainer = Exp1Trainer(model, config, device)
-    trainer.train(train_loader, val_loader)
+    ckpt_type = config['experiment']['ckpt_type']
+    ckpt_path = config['experiment']['pretrained_ckpt_path'] if ckpt_type == 'pretrained' else config['experiment']['mlp_ckpt_path']
+    freeze_gru = config['experiment']['freeze_gru']
+    
+    model = Exp2Model(
+        config=config, 
+        num_days=config['dataset']['n_sessions'],
+        pretrained_ckpt_path=ckpt_path,
+        ckpt_type=ckpt_type,
+        freeze_gru=freeze_gru
+    )
+    
+    # Report parameter counts
+    total_params = sum(p.numel() for p in model.parameters())
+    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    frozen_params = total_params - trainable_params
+    
+    print(f"Initialized Exp2Model:")
+    print(f"  Total parameters: {total_params:,}")
+    print(f"  Trainable parameters: {trainable_params:,}")
+    print(f"  Frozen parameters: {frozen_params:,}")
+    print(f"  Adapter parameters: {sum(p.numel() for p in model.day_adapter.adapters.parameters()):,}")
+    print(f"  GRU parameters: {sum(p.numel() for p in model.gru_decoder.parameters()):,}")
+    print(f"  Classifier parameters: {sum(p.numel() for p in model.classifier.parameters()):,}")
+    
+    # 6. Initialize Trainer and Start Training
+    trainer = Exp2Trainer(model, config, device)
+    trainer.train(train_loader, val_loader, resume_from=resume_checkpoint)
 
 if __name__ == "__main__":
     main()

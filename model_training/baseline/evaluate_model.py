@@ -10,7 +10,7 @@ import editdistance
 import argparse
 
 from rnn_model import GRUDecoder
-from evaluate_model_helpers import *
+from cs230_braintotext.model_training.baseline.evaluate_model_helpers import *
 
 # argument parser for command line arguments
 parser = argparse.ArgumentParser(description='Evaluate a pretrained RNN model on the copy task dataset.')

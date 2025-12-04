@@ -11,16 +11,16 @@ import torch
 import yaml
 from tqdm import tqdm
 
-from data_augmentations import gauss_smooth
-from evaluate_model_helpers import LOGIT_TO_PHONEME, load_h5py_file
-from run_rnn_only import (
+from cs230_braintotext.model_training.baseline.data_augmentations import gauss_smooth
+from cs230_braintotext.model_training.baseline.evaluate_model_helpers import LOGIT_TO_PHONEME, load_h5py_file
+from cs230_braintotext.model_training.run_rnn_only import (
     calculate_aggregate_error_rate,
     calculate_error_rate,
     decode_logits_to_ids,
     load_model as load_baseline_model,
     select_device,
 )
-from exp2_model import Exp2Model
+from cs230_braintotext.model_training.mlp_gru_model import Exp2Model
 
 
 def load_exp2_model(checkpoint_path: str, config_path: str, device: torch.device):

@@ -7,8 +7,8 @@ import torch
 from omegaconf import OmegaConf
 
 from rnn_model import GRUDecoder
-from evaluate_model_helpers import LOGIT_TO_PHONEME, load_h5py_file
-from data_augmentations import gauss_smooth
+from cs230_braintotext.model_training.baseline.evaluate_model_helpers import LOGIT_TO_PHONEME, load_h5py_file
+from cs230_braintotext.model_training.baseline.data_augmentations import gauss_smooth
 try:
     from nejm_b2txt_utils.general_utils import calculate_error_rate, calculate_aggregate_error_rate
 except ModuleNotFoundError:
