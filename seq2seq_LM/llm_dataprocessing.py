@@ -9,6 +9,9 @@ import os
 import json
 import h5py
 import re
+import collections
+import difflib
+from tqdm import tqdm
 from pathlib import Path
 from typing import Optional
 
@@ -27,6 +30,81 @@ LOGIT_TO_PHONEME = [
     ' | ',  # Word separator -> SEP
 ]
 
+CLEAN_FILE = "../data/llm_training_data/val.jsonl"
+SYNTH_FILE = "../data/llm_training_data/val_synth.jsonl"
+
+NOISE_PROFILE_FILE = "../data/llm_training_data/noise_profile.json"
+
+def learn_pred_distribution(save_path: str = NOISE_PROFILE_FILE):
+    """
+    Learn the error distribution between clean and noisy phoneme sequences.
+    Saves the noise profile to a JSON file.
+    """
+    pairs = []
+    with open(CLEAN_FILE, 'r') as f_clean, open(SYNTH_FILE, 'r') as f_synth:
+        for line_c, line_s in zip(f_clean, f_synth):
+            d_c = json.loads(line_c)
+            d_s = json.loads(line_s)
+            if d_c['target'] != d_s['target']:
+                print(f"Target mismatch: {dc['target']} != {d_s['target']} on line {line_c}")
+                continue
+            clean_seq = d_c['input'].split()
+            noisy_seq = d_s['input'].split()
+            pairs.append((clean_seq, noisy_seq))
+    
+    print(f"Analyzing {len(pairs)} aligned pairs")
+    confusions = collections.defaultdict(collections.Counter)
+
+    for clean, messy in tqdm(pairs, desc="analyzing errors"):
+        matcher = difflib.SequenceMatcher(None, clean, messy)
+        for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+            # substitution errors
+            if tag == 'replace':
+                clean_segment = clean[i1:i2]
+                messy_segment = messy[j1:j2]
+
+                if len(clean_segment) == len(messy_segment):
+                    for c, m in zip(clean_segment, messy_segment):
+                        confusions[c][m] += 1
+                elif len(messy_segment) > len(clean_segment):
+                    for k, c in enumerate(clean_segment):
+                        confusions[c][messy_segment[k]] += 1
+                elif len(clean_segment) > len(messy_segment):
+                    for k, m in enumerate(messy_segment):
+                        confusions[clean_segment[k]][m] += 1
+                    for k in range(len(messy_segment), len(clean_segment)):
+                        confusions[clean_segment[k]]["<DELETE>"] += 1
+            
+            elif tag == 'delete':
+                for k in range(i1, i2):
+                    confusions[clean[k]]["<DELETE>"] += 1
+            elif tag == 'insert':
+                pass
+    
+    noise_profile = {}
+    for token, counts in confusions.items():
+        total = sum(counts.values())
+        mappings = []
+        keep_count = counts.get(token, 0)
+        keep_prob = keep_count / total
+
+        for err_token, count in counts.items():
+            if err_token == token: continue
+
+            prob = count / total
+            if prob > 0.01:
+                mappings.append({"error": err_token, "prob": prob})
+        if mappings:    
+            noise_profile[token] = mappings
+
+    print(f"Learned error profile for {len(noise_profile)} phonemes:")
+    
+    # Save to JSON
+    with open(save_path, 'w') as f:
+        json.dump(noise_profile, f, indent=2)
+    print(f"Saved noise profile to {save_path}")
+    
+    return noise_profile
 
 def remove_punctuation(sentence: str) -> str:
     """Remove punctuation and normalize the sentence."""
@@ -202,40 +280,51 @@ def get_unique_phoneme_tokens(jsonl_path: str) -> set[str]:
 
 
 if __name__ == '__main__':
-    # Define paths
-    project_root = Path(__file__).parent.parent
-    data_dir = project_root / 'data' / 'hdf5_data_final'
-    output_dir = project_root / 'data' / 'llm_training_data'
+    import sys
     
-    print("Processing brain-to-text data for LLM finetuning...")
-    print(f"Data directory: {data_dir}")
-    print(f"Output directory: {output_dir}")
-    print()
-    
-    # Process only 3 sessions for spot checking
-    train_count, val_count = process_sessions(
-        data_dir=str(data_dir),
-        output_dir=str(output_dir),
-        max_sessions=45,  # Limit for spot checking
-    )
-    
-    print(f"\nTotal: {train_count} train, {val_count} val examples")
-    
-    # Show unique phoneme tokens for tokenizer
-    train_jsonl = output_dir / 'train.jsonl'
-    if train_jsonl.exists():
-        tokens = get_unique_phoneme_tokens(str(train_jsonl))
-        print(f"\nUnique phoneme tokens ({len(tokens)}): {sorted(tokens)}")
-    
-    # Print first 5 examples for spot checking
-    print("\n" + "="*60)
-    print("SAMPLE EXAMPLES FOR SPOT CHECKING:")
-    print("="*60)
-    with open(train_jsonl, 'r') as f:
-        for i, line in enumerate(f):
-            if i >= 5:
-                break
-            example = json.loads(line)
-            print(f"\nExample {i+1}:")
-            print(f"  Input:  {example['input']}")
-            print(f"  Target: {example['target']}")
+    if len(sys.argv) > 1 and sys.argv[1] == "noise":
+        # Run noise profile learning
+        print("Learning noise profile from clean/synth data...")
+        noise_profile = learn_pred_distribution()
+        print(f"\nSample entries:")
+        for token, mappings in list(noise_profile.items())[:5]:
+            print(f"  {token}: {mappings}")
+    else:
+        # Default: process HDF5 data
+        # Define paths
+        project_root = Path(__file__).parent.parent
+        data_dir = project_root / 'data' / 'hdf5_data_final'
+        output_dir = project_root / 'data' / 'llm_training_data'
+        
+        print("Processing brain-to-text data for LLM finetuning...")
+        print(f"Data directory: {data_dir}")
+        print(f"Output directory: {output_dir}")
+        print()
+        
+        # Process only 3 sessions for spot checking
+        train_count, val_count = process_sessions(
+            data_dir=str(data_dir),
+            output_dir=str(output_dir),
+            max_sessions=45,  # Limit for spot checking
+        )
+        
+        print(f"\nTotal: {train_count} train, {val_count} val examples")
+        
+        # Show unique phoneme tokens for tokenizer
+        train_jsonl = output_dir / 'train.jsonl'
+        if train_jsonl.exists():
+            tokens = get_unique_phoneme_tokens(str(train_jsonl))
+            print(f"\nUnique phoneme tokens ({len(tokens)}): {sorted(tokens)}")
+        
+        # Print first 5 examples for spot checking
+        print("\n" + "="*60)
+        print("SAMPLE EXAMPLES FOR SPOT CHECKING:")
+        print("="*60)
+        with open(train_jsonl, 'r') as f:
+            for i, line in enumerate(f):
+                if i >= 5:
+                    break
+                example = json.loads(line)
+                print(f"\nExample {i+1}:")
+                print(f"  Input:  {example['input']}")
+                print(f"  Target: {example['target']}")

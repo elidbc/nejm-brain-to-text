@@ -10,6 +10,7 @@
 
 # ignore model checkpoints
 model_training/trained_models/*
+seq2seq_LM/trained_models/*
 
 # ignore wandb files
 **/wandb/*
