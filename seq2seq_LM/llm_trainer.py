@@ -21,7 +21,7 @@ TRAIN_DATA_FILE = '../data/llm_training_data/train.jsonl'
 TRAIN_SYNTH_DATA_FILE = '../data/llm_training_data/train_synth.jsonl'
 VAL_DATA_FILE = '../data/llm_training_data/val.jsonl'
 VAL_SYNTH_DATA_FILE = '../data/llm_training_data/val_synth.jsonl'
-OUTPUT_DIR = 'trained_models'
+OUTPUT_DIR = 'trained_models/v2'
 NOISE_PROFILE_FILE = '../data/llm_training_data/noise_profile.json'
 
 MAX_INPUT_LENGTH = 512
@@ -48,7 +48,7 @@ def train():
         tokens = phoneme_str.split()
         new_tokens = []
         for t in tokens:
-            if random.random() < 0.3:
+            if random.random() < 0.85:
                 new_tokens.append(t)
                 continue
             if t in profile:
@@ -81,6 +81,14 @@ def train():
     print(f"Generated {len(train_augmented)} synthetic examples")
     train_data = train_clean + train_augmented
 
+    # Save the full training dataset to v2 folder
+    import os
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    train_data_path = os.path.join(OUTPUT_DIR, "QLoRA_v2_train_data.json")
+    with open(train_data_path, 'w') as f:
+        json.dump(train_data, f, indent=2)
+    print(f"Saved {len(train_data)} training examples to {train_data_path}")
+
     random.shuffle(train_data)
     random.shuffle(val_data)
 
@@ -111,7 +119,7 @@ def train():
         inference_mode=False,
         r = 64,
         lora_alpha=32,
-        lora_dropout=0.01,
+        lora_dropout=0.1,
         target_modules=["q", "k", "v", "o", "wi_0", "wi_1", "wo"],
     )
 
@@ -202,13 +210,14 @@ def train():
         # Speed
         fp16=False, 
         gradient_checkpointing=False,
-        per_device_train_batch_size=32,
+        per_device_train_batch_size=64,
         gradient_accumulation_steps=1,
+        dataloader_num_workers=4,
 
         # Stability
         eval_strategy="epoch",
         save_strategy="epoch",
-        per_device_eval_batch_size=32,
+        per_device_eval_batch_size=64,
         save_total_limit=2,
         num_train_epochs=5,
         predict_with_generate=True,
@@ -383,10 +392,10 @@ def longest_seq():
 
 if __name__ == "__main__":
     
-    checkpoint = "trained_models/checkpoint-2525"
-    eval_model(checkpoint_path=checkpoint)
+    #checkpoint = "trained_models/checkpoint-2525"
+    #eval_model(checkpoint_path=checkpoint)
 
-    # train()
+    train()
 
 
     

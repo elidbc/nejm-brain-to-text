@@ -46,7 +46,7 @@ def learn_pred_distribution(save_path: str = NOISE_PROFILE_FILE):
             d_c = json.loads(line_c)
             d_s = json.loads(line_s)
             if d_c['target'] != d_s['target']:
-                print(f"Target mismatch: {dc['target']} != {d_s['target']} on line {line_c}")
+                print(f"Target mismatch: {d_c['target']} != {d_s['target']} on line {line_c}")
                 continue
             clean_seq = d_c['input'].split()
             noisy_seq = d_s['input'].split()
