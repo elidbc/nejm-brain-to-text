@@ -21,7 +21,7 @@ TRAIN_DATA_FILE = '../data/llm_training_data/train.jsonl'
 TRAIN_SYNTH_DATA_FILE = '../data/llm_training_data/train_synth.jsonl'
 VAL_DATA_FILE = '../data/llm_training_data/val.jsonl'
 VAL_SYNTH_DATA_FILE = '../data/llm_training_data/val_synth.jsonl'
-OUTPUT_DIR = 'trained_models/v2'
+OUTPUT_DIR = 'trained_models/v3'
 NOISE_PROFILE_FILE = '../data/llm_training_data/noise_profile.json'
 
 MAX_INPUT_LENGTH = 512
@@ -48,7 +48,7 @@ def train():
         tokens = phoneme_str.split()
         new_tokens = []
         for t in tokens:
-            if random.random() < 0.85:
+            if random.random() < 0.91:
                 new_tokens.append(t)
                 continue
             if t in profile:
@@ -79,12 +79,12 @@ def train():
                 "target": example['target'],
             })
     print(f"Generated {len(train_augmented)} synthetic examples")
-    train_data = train_clean + train_augmented
+    train_data = train_augmented
 
     # Save the full training dataset to v2 folder
     import os
     os.makedirs(OUTPUT_DIR, exist_ok=True)
-    train_data_path = os.path.join(OUTPUT_DIR, "QLoRA_v2_train_data.json")
+    train_data_path = os.path.join(OUTPUT_DIR, "QLoRA_v3_train_data.json")
     with open(train_data_path, 'w') as f:
         json.dump(train_data, f, indent=2)
     print(f"Saved {len(train_data)} training examples to {train_data_path}")
@@ -257,10 +257,10 @@ def eval_model(checkpoint_path: str = "trained_models/checkpoint-2525", num_exam
     # Load validation data
     val_data = []
     print(f"Loading validation data from {VAL_DATA_FILE}")
-    with open(VAL_DATA_FILE, 'r') as f:
+    #with open(VAL_DATA_FILE, 'r') as f:
+        #val_data += [json.loads(line) for line in f]
+    with open(VAL_SYNTH_DATA_FILE, 'r') as f:
         val_data += [json.loads(line) for line in f]
-    #with open(VAL_SYNTH_DATA_FILE, 'r') as f:
-    #    val_data += [json.loads(line) for line in f]
     
     print(f"Total validation samples: {len(val_data)}")
     
@@ -392,10 +392,10 @@ def longest_seq():
 
 if __name__ == "__main__":
     
-    #checkpoint = "trained_models/checkpoint-2525"
-    #eval_model(checkpoint_path=checkpoint)
+    checkpoint = "trained_models/v2/checkpoint-2525"
+    eval_model(checkpoint_path=checkpoint)
 
-    train()
+    #train()
 
 
     

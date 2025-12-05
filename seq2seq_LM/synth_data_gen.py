@@ -13,9 +13,11 @@ import argparse
 import json
 import os
 import sys
+from collections import defaultdict
 from pathlib import Path
 
 import h5py
+import Levenshtein
 import numpy as np
 import torch
 import yaml
@@ -23,8 +25,9 @@ from tqdm import tqdm
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent / 'model_training'))
+sys.path.insert(0, str(Path(__file__).parent.parent / 'model_training' / 'baseline'))
 from data_augmentations import gauss_smooth
-from exp2_model import Exp2Model
+from mlp_gru_model import Exp2Model
 
 # Phoneme mapping from model output indices to phoneme names
 LOGIT_TO_PHONEME = [
@@ -280,6 +283,217 @@ def save_jsonl(examples: list[dict], output_path: str):
             f.write(json.dumps(example) + '\n')
 
 
+def load_jsonl(file_path: str) -> list[dict]:
+    """Load examples from JSONL file."""
+    examples = []
+    with open(file_path, 'r') as f:
+        for line in f:
+            line = line.strip()
+            if line:
+                examples.append(json.loads(line))
+    return examples
+
+
+def build_confusion_matrix(ground_truth_list: list[str], gru_prediction_list: list[str]) -> dict:
+    """
+    Build a phoneme confusion matrix using Levenshtein edit operations.
+    
+    This analyzes which ground truth phonemes the GRU most often gets incorrect,
+    tracking substitutions (phoneme A predicted as phoneme B), deletions (phoneme
+    was missed), and insertions (extra phonemes were predicted).
+    
+    Args:
+        ground_truth_list: list of phoneme strings (e.g., ["W IY R SEP", "H EH L OW SEP"])
+        gru_prediction_list: list of phoneme strings (e.g., ["W IY SEP", "H EH L OW SEP"])
+    
+    Returns:
+        noise_profile dict mapping source phonemes to their error distributions
+    """
+    # Structure: substitutions[actual_phoneme][predicted_phoneme] = count
+    substitutions = defaultdict(lambda: defaultdict(int))
+    deletions = defaultdict(int)
+    insertions = defaultdict(int)
+    
+    # Count ALL occurrences of each phoneme in ground truth (not just errors!)
+    total_occurrences = defaultdict(int)
+    
+    for truth, pred in zip(ground_truth_list, gru_prediction_list):
+        # Work with lists of phonemes (space-separated)
+        t_tokens = truth.split()
+        p_tokens = pred.split()
+        
+        # Count all ground truth phoneme occurrences
+        for token in t_tokens:
+            total_occurrences[token] += 1
+        
+        # Get alignment operations using Levenshtein
+        # editops expects sequences, so we pass the token lists directly
+        ops = Levenshtein.editops(t_tokens, p_tokens)
+        
+        # ops is a list of tuples: (operation_type, src_index, dest_index)
+        # e.g., ('replace', 0, 0) means t_tokens[0] became p_tokens[0]
+        
+        for op, t_idx, p_idx in ops:
+            if op == 'replace':
+                src = t_tokens[t_idx]
+                dst = p_tokens[p_idx]
+                substitutions[src][dst] += 1
+            elif op == 'delete':
+                src = t_tokens[t_idx]
+                deletions[src] += 1
+            elif op == 'insert':
+                # Insertions: extra phonemes predicted that weren't in ground truth
+                dst = p_tokens[p_idx]
+                insertions[dst] += 1
+    
+    # Convert counts to probabilities for noise_profile
+    noise_profile = {}
+    
+    # Iterate over ALL phonemes that appear in ground truth
+    for src in total_occurrences:
+        total = total_occurrences[src]
+        if total < 5:
+            continue  # Skip rare phonemes to avoid noise
+        
+        mappings = []
+        
+        # Add the "error" mappings (substitutions)
+        if src in substitutions:
+            for dst, count in substitutions[src].items():
+                prob = count / total
+                mappings.append({"error": dst, "prob": prob})
+        
+        # Add deletion probability
+        del_count = deletions.get(src, 0)
+        if del_count > 0:
+            mappings.append({"error": "<DELETE>", "prob": del_count / total})
+        
+        # Calculate error rate (remainder is probability of staying correct)
+        error_sum = sum(m['prob'] for m in mappings)
+        correct_prob = 1.0 - error_sum
+        
+        # Only add to profile if there is a significant error rate
+        if error_sum > 0.01:
+            # Sort mappings by probability (descending)
+            mappings.sort(key=lambda x: x['prob'], reverse=True)
+            noise_profile[src] = {
+                "correct_prob": correct_prob,
+                "error_rate": error_sum,
+                "total_occurrences": total,
+                "mappings": mappings
+            }
+    
+    # Also track overall insertion statistics
+    total_insertions = sum(insertions.values())
+    if total_insertions > 0:
+        insertion_profile = []
+        for phoneme, count in sorted(insertions.items(), key=lambda x: x[1], reverse=True):
+            insertion_profile.append({
+                "phoneme": phoneme,
+                "count": count,
+                "prob": count / total_insertions
+            })
+        noise_profile["<INSERTIONS>"] = {
+            "total_count": total_insertions,
+            "distribution": insertion_profile[:20]  # Top 20 inserted phonemes
+        }
+    
+    return noise_profile
+
+
+def compute_gru_confusion_matrix(
+    val_jsonl_path: str,
+    val_synth_jsonl_path: str,
+    output_path: str,
+    show_progress: bool = True,
+) -> dict:
+    """
+    Compute GRU confusion matrix by comparing ground truth phonemes (val.jsonl)
+    with GRU predictions (val_synth.jsonl).
+    
+    The 'input' field in val.jsonl contains ground truth phonemes.
+    The 'input' field in val_synth.jsonl contains GRU predicted phonemes.
+    
+    Args:
+        val_jsonl_path: Path to val.jsonl (ground truth phonemes)
+        val_synth_jsonl_path: Path to val_synth.jsonl (GRU predictions)
+        output_path: Path to save the confusion matrix JSON
+        show_progress: Whether to show progress
+    
+    Returns:
+        The computed noise profile dictionary
+    """
+    print(f"Loading ground truth phonemes from: {val_jsonl_path}")
+    val_examples = load_jsonl(val_jsonl_path)
+    
+    print(f"Loading GRU predictions from: {val_synth_jsonl_path}")
+    val_synth_examples = load_jsonl(val_synth_jsonl_path)
+    
+    if len(val_examples) != len(val_synth_examples):
+        print(f"Warning: Different number of examples - val: {len(val_examples)}, val_synth: {len(val_synth_examples)}")
+        # Use the minimum
+        min_len = min(len(val_examples), len(val_synth_examples))
+        val_examples = val_examples[:min_len]
+        val_synth_examples = val_synth_examples[:min_len]
+    
+    # Verify that targets match (they should be paired correctly)
+    mismatches = 0
+    for i, (gt, pred) in enumerate(zip(val_examples, val_synth_examples)):
+        if gt['target'] != pred['target']:
+            mismatches += 1
+            if mismatches <= 3:
+                print(f"Warning: Target mismatch at line {i}: '{gt['target']}' vs '{pred['target']}'")
+    
+    if mismatches > 0:
+        print(f"Total target mismatches: {mismatches}")
+    
+    # Extract phoneme sequences
+    ground_truth_list = [ex['input'] for ex in val_examples]
+    gru_prediction_list = [ex['input'] for ex in val_synth_examples]
+    
+    print(f"\nBuilding confusion matrix from {len(ground_truth_list)} examples...")
+    
+    # Build the confusion matrix
+    noise_profile = build_confusion_matrix(ground_truth_list, gru_prediction_list)
+    
+    # Save to JSON
+    with open(output_path, 'w') as f:
+        json.dump(noise_profile, f, indent=2)
+    
+    print(f"\nSaved confusion matrix to: {output_path}")
+    
+    # Print summary
+    print("\n" + "=" * 60)
+    print("CONFUSION MATRIX SUMMARY")
+    print("=" * 60)
+    
+    # Sort phonemes by error rate
+    phoneme_errors = []
+    for phoneme, data in noise_profile.items():
+        if phoneme == "<INSERTIONS>":
+            continue
+        phoneme_errors.append((phoneme, data['error_rate'], data['total_occurrences'], data['mappings']))
+    
+    phoneme_errors.sort(key=lambda x: x[1], reverse=True)
+    
+    print("\nTop 15 phonemes by error rate:")
+    print("-" * 60)
+    for i, (phoneme, error_rate, total, mappings) in enumerate(phoneme_errors[:15], 1):
+        top_errors = mappings[:3]
+        error_strs = [f"{m['error']}({m['prob']:.2%})" for m in top_errors]
+        print(f"  {i:2d}. {phoneme:6s} | Error rate: {error_rate:.2%} | N={total:4d} | Top: {', '.join(error_strs)}")
+    
+    # Print insertion summary
+    if "<INSERTIONS>" in noise_profile:
+        ins_data = noise_profile["<INSERTIONS>"]
+        print(f"\nTotal insertions: {ins_data['total_count']}")
+        top_ins = ins_data['distribution'][:5]
+        ins_strs = [f"{d['phoneme']}({d['count']})" for d in top_ins]
+        print(f"Top inserted phonemes: {', '.join(ins_strs)}")
+    
+    return noise_profile
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Generate synthetic training data using exp2 model predictions."
@@ -332,18 +546,44 @@ def main():
         action="store_true",
         help="Disable progress bars",
     )
+    parser.add_argument(
+        "--confusion_matrix",
+        action="store_true",
+        help="Compute GRU confusion matrix from existing val.jsonl and val_synth.jsonl files",
+    )
+    parser.add_argument(
+        "--confusion_output",
+        type=str,
+        default="GRU_confusion_matrix.json",
+        help="Filename for confusion matrix output",
+    )
     
     args = parser.parse_args()
     
     # Resolve paths relative to script location
     script_dir = Path(__file__).parent
-    checkpoint_path = str((script_dir / args.checkpoint).resolve())
-    config_path = str((script_dir / args.config).resolve())
-    data_dir = str((script_dir / args.data_dir).resolve())
     output_dir = Path((script_dir / args.output_dir).resolve())
     
     # Create output directory
     output_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Handle confusion matrix mode
+    if args.confusion_matrix:
+        val_jsonl_path = str(output_dir / "val.jsonl")
+        val_synth_jsonl_path = str(output_dir / "val_synth.jsonl")
+        confusion_output_path = str(output_dir / args.confusion_output)
+        
+        compute_gru_confusion_matrix(
+            val_jsonl_path=val_jsonl_path,
+            val_synth_jsonl_path=val_synth_jsonl_path,
+            output_path=confusion_output_path,
+            show_progress=not args.no_progress,
+        )
+        return
+    
+    checkpoint_path = str((script_dir / args.checkpoint).resolve())
+    config_path = str((script_dir / args.config).resolve())
+    data_dir = str((script_dir / args.data_dir).resolve())
     
     # Select device
     device = select_device(args.device)
