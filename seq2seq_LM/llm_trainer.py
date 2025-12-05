@@ -22,21 +22,20 @@ TRAIN_SYNTH_DATA_FILE = '../data/llm_training_data/train_synth.jsonl'
 VAL_DATA_FILE = '../data/llm_training_data/val.jsonl'
 VAL_SYNTH_DATA_FILE = '../data/llm_training_data/val_synth.jsonl'
 OUTPUT_DIR = 'trained_models/v3'
-NOISE_PROFILE_FILE = '../data/llm_training_data/noise_profile.json'
+NOISE_PROFILE_FILE = '../data/llm_training_data/GRU_confusion_matrix.json'
 
 MAX_INPUT_LENGTH = 512
 MAX_TARGET_LENGTH = 256
 
 def train():
-    train_data = []
     val_data = []
 
     print(f"Loading data from {TRAIN_DATA_FILE} and {VAL_DATA_FILE}")
     # Load clean data, and clean + synth val data
     with open(TRAIN_DATA_FILE, 'r') as f:
         train_clean = [json.loads(line) for line in f]
-    with open(VAL_DATA_FILE, 'r') as f:
-        val_data += [json.loads(line) for line in f]
+    #with open(VAL_DATA_FILE, 'r') as f:
+        #val_data += [json.loads(line) for line in f]
     with open(VAL_SYNTH_DATA_FILE, 'r') as f:
         val_data += [json.loads(line) for line in f]
     
@@ -56,7 +55,7 @@ def train():
             # --- A. INSERTION NOISE (Hallucinations) ---
             # Randomly insert a phoneme *before* the current one
             # Rate: 1% (adjust based on how hallucinatory your GRU is)
-            if random.random() < 0.01: 
+            if random.random() < 0.005: 
                 new_tokens.append(random.choices(ins_candidates, weights=ins_weights, k=1)[0])
 
             # --- B. SEP PROTECTION ---
@@ -73,8 +72,8 @@ def train():
             if t in profile and t != "<INSERTIONS>":
                 stats = profile[t]
                 
-                # The profile gives us the exact probability this phoneme is CORRECT
-                # e.g., "Y" might be correct 89% of the time.
+                # The confusion matrix gives us the exact probability this phoneme is CORRECT
+                # e.g., "Y" might be correct 89.9% of the time.
                 correct_prob = stats.get('correct_prob', 0.9)
                 
                 # Roll to see if we keep it clean
@@ -118,7 +117,7 @@ def train():
 
     print("Generating synthetic data...")
     train_augmented = []
-    for _ in range(3):
+    for _ in range(8):
         for example in train_clean:
             noisy_input = data_noiser(example['input'], noise_profile)
             train_augmented.append({
@@ -249,7 +248,7 @@ def train():
         # optimization
         output_dir=OUTPUT_DIR,
         optim="paged_adamw_32bit",
-        learning_rate=2e-4,
+        learning_rate=3e-4,
         lr_scheduler_type="cosine",
         weight_decay=0.01,
         warmup_ratio=0.05,
@@ -262,18 +261,20 @@ def train():
         dataloader_num_workers=4,
 
         # Stability
-        eval_strategy="epoch",
-        save_strategy="epoch",
+        eval_strategy="steps",
+        save_strategy="steps",
+        eval_steps=250,
+        save_steps=250,
         per_device_eval_batch_size=64,
-        save_total_limit=2,
-        num_train_epochs=5,
+        save_total_limit=3,
+        num_train_epochs=2,
         predict_with_generate=True,
-        logging_steps=50,
+        logging_steps=25,
         load_best_model_at_end=True,
         metric_for_best_model="wer",
         greater_is_better=False,
         report_to="wandb",
-        run_name="byt5-finetune-QLoRA-dataaug"
+        run_name="v3-8x-synth"
     )
 
     trainer = Seq2SeqTrainer(
@@ -439,10 +440,10 @@ def longest_seq():
 
 if __name__ == "__main__":
     
-    checkpoint = "trained_models/v2/checkpoint-2525"
-    eval_model(checkpoint_path=checkpoint)
+    #checkpoint = "trained_models/v2/checkpoint-2525"
+    #eval_model(checkpoint_path=checkpoint)
 
-    #train()
+    train()
 
 
     
