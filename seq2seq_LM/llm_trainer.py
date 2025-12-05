@@ -47,26 +47,73 @@ def train():
     def data_noiser(phoneme_str, profile):
         tokens = phoneme_str.split()
         new_tokens = []
+        insert_dist = profile.get("<INSERTIONS>", {}).get("distribution", [])
+        if insert_dist:
+            ins_candidates = [x['phoneme'] for x in insert_dist]
+            ins_weights = [x['prob'] for x in insert_dist]
+
         for t in tokens:
-            if random.random() < 0.91:
-                new_tokens.append(t)
-                continue
-            if t in profile:
-                mappings = profile[t]
-                candidates = [m['error'] for m in mappings]
-                probs = [m['prob'] for m in mappings]
+            # --- A. INSERTION NOISE (Hallucinations) ---
+            # Randomly insert a phoneme *before* the current one
+            # Rate: 1% (adjust based on how hallucinatory your GRU is)
+            if random.random() < 0.01: 
+                new_tokens.append(random.choices(ins_candidates, weights=ins_weights, k=1)[0])
 
-                total_prob = sum(probs)
-                norm_probs = [p / total_prob for p in probs]
-
-                choice = random.choices(candidates, weights=norm_probs, k=1)[0]
-
-                if choice == "<DELETE>":
-                    continue
+            # --- B. SEP PROTECTION ---
+            if t == "SEP":
+                # SEP is structural. Only mess with it rarely (e.g. 1% chance)
+                # unless your profile explicitly shows high SEP error rates.
+                if random.random() > 0.99:
+                     pass # Delete SEP
                 else:
-                    new_tokens.append(choice)
+                    new_tokens.append(t)
+                continue
+
+            # --- C. SUBSTITUTION / DELETION ---
+            if t in profile and t != "<INSERTIONS>":
+                stats = profile[t]
+                
+                # The profile gives us the exact probability this phoneme is CORRECT
+                # e.g., "Y" might be correct 89% of the time.
+                correct_prob = stats.get('correct_prob', 0.9)
+                
+                # Roll to see if we keep it clean
+                if random.random() < correct_prob:
+                    new_tokens.append(t)
+                else:
+                    # We are in the error zone. Choose a specific error.
+                    mappings = stats.get('mappings', [])
+                    if not mappings:
+                        # Fallback if mappings list is empty but error rate > 0
+                        new_tokens.append(t) 
+                        continue
+                        
+                    err_candidates = [m['error'] for m in mappings]
+                    err_weights = [m['prob'] for m in mappings]
+                    
+                    # Normalize weights to sum to 1
+                    total_w = sum(err_weights)
+                    if total_w > 0:
+                        norm_weights = [w/total_w for w in err_weights]
+                        choice = random.choices(err_candidates, weights=norm_weights, k=1)[0]
+                        
+                        if choice == "<DELETE>":
+                            continue
+                        else:
+                            new_tokens.append(choice)
+                    else:
+                        new_tokens.append(t)
             else:
-                new_tokens.append(t)
+                # Token not in profile (rare phoneme). 
+                # Apply a small generic noise (e.g. 5%) or keep clean.
+                if random.random() < 0.95:
+                    new_tokens.append(t)
+                else:
+                    # Randomly drop rare phonemes occasionally
+                    if random.random() < 0.5:
+                        continue 
+                    new_tokens.append(t)
+
         return " ".join(new_tokens)
 
     print("Generating synthetic data...")
