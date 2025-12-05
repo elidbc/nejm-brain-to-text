@@ -127,7 +127,7 @@ def train():
     print(f"Generated {len(train_augmented)} synthetic examples")
     train_data = train_augmented
 
-    # Save the full training dataset to v2 folder
+    # Save the full training dataset to v3 folder
     import os
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     train_data_path = os.path.join(OUTPUT_DIR, "QLoRA_v3_train_data.json")
@@ -219,10 +219,6 @@ def train():
         result = metric_rouge.compute(predictions=norm_preds, references=norm_labels, use_stemmer=True)
         
         # --- WER ---
-        # WER is sensitive to casing and punctuation. 
-        # Usually, we verify "standardized" WER (lowercase, no punctuation) 
-        # but for LLM generation, raw WER is often fine. 
-        # If errors happen due to empty strings, we handle them safely.
         try:
             wer_score = metric_wer.compute(predictions=norm_preds, references=norm_labels)
         except ValueError as e:
@@ -231,8 +227,8 @@ def train():
             wer_score = 1.0 
 
         # Combine results
-        final_metrics = {k: round(v * 100, 4) for k, v in result.items()} # ROUGE is 0-100 scale usually
-        final_metrics["wer"] = round(wer_score * 100, 4) # Convert WER to percentage for consistency
+        final_metrics = {k: round(v * 100, 4) for k, v in result.items()} # ROUGE is 0-100 scale 
+        final_metrics["wer"] = round(wer_score * 100, 4) # Convert WER to percentage 
         
         return final_metrics
     
@@ -304,9 +300,7 @@ def eval_model(checkpoint_path: str = "trained_models/checkpoint-2525", num_exam
     
     # Load validation data
     val_data = []
-    print(f"Loading validation data from {VAL_DATA_FILE}")
-    #with open(VAL_DATA_FILE, 'r') as f:
-        #val_data += [json.loads(line) for line in f]
+    print(f"Loading validation data from {VAL_SYNTH_DATA_FILE}")
     with open(VAL_SYNTH_DATA_FILE, 'r') as f:
         val_data += [json.loads(line) for line in f]
     
@@ -440,10 +434,10 @@ def longest_seq():
 
 if __name__ == "__main__":
     
-    #checkpoint = "trained_models/v2/checkpoint-2525"
-    #eval_model(checkpoint_path=checkpoint)
+    checkpoint = "trained_models/v3"
+    eval_model(checkpoint_path=checkpoint)
 
-    train()
+    #train()
 
 
     
