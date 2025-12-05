@@ -250,8 +250,8 @@ def train():
         output_dir=OUTPUT_DIR,
         optim="paged_adamw_32bit",
         learning_rate=2e-4,
-        lr_scheduler_type="linear",
-        weight_decay=0.0,
+        lr_scheduler_type="cosine",
+        weight_decay=0.01,
         warmup_ratio=0.05,
 
         # Speed
